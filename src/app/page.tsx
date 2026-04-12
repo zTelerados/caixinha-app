@@ -183,7 +183,7 @@ export default function Dashboard() {
       const res = await fetch(`/api/evolution?month=${encodeURIComponent(month)}`);
       if (!res.ok) throw new Error('Erro ao carregar evolução');
       const data = await res.json();
-      setEvolution(data);
+      setEvolution(data.evolution || []);
     } catch (err) {
       console.error('Error fetching evolution:', err);
       setError('Erro ao carregar gráfico de evolução');
