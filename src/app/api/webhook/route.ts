@@ -11,10 +11,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Missing params' }, { status: 400 });
     }
 
-    // Fire and forget — Twilio expects fast response
-    routeMessage(from, body).catch((err) =>
-      console.error('Handler error:', err)
-    );
+    // Await processing — Vercel kills the function after response
+    await routeMessage(from, body);
 
     // TwiML empty response (Twilio expects this)
     return new NextResponse(
