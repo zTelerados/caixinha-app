@@ -71,10 +71,8 @@ export async function handleCorrection(
       user_id: userId,
       action: 'update',
       transaction_id: transaction_id,
-      details: {
-        from: { amount: transaction.amount, category_id: transaction.category_id },
-        to: { amount: updatedAmount, category_id: updatedCategoryId },
-      },
+      old_value: { amount: transaction.amount, category_id: transaction.category_id },
+      new_value: { amount: updatedAmount, category_id: updatedCategoryId },
       created_at: new Date().toISOString(),
     },
   ]);

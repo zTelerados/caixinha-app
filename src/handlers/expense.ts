@@ -15,7 +15,7 @@ async function analyzeContext(
   // Total for the month
   const { data: monthTxs } = await supabaseAdmin
     .from('transactions')
-    .select('amount, category_id')
+    .select('amount, category_id, date')
     .eq('user_id', userId)
     .eq('type', 'expense')
     .eq('month_label', monthLabel(now))
@@ -157,7 +157,8 @@ export async function handleExpense(
       user_id: userId,
       action: 'create',
       transaction_id: transactionId,
-      details: { description: parsed.description, amount: parsed.amount },
+      old_value: null,
+      new_value: { description: parsed.description, amount: parsed.amount },
       created_at: now.toISOString(),
     },
   ]);

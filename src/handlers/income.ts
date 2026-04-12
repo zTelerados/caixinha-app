@@ -50,7 +50,8 @@ export async function handleIncome(
       user_id: userId,
       action: 'create',
       transaction_id: transactionId,
-      details: { source: parsed.source, amount: parsed.amount },
+      old_value: null,
+      new_value: { source: parsed.source, amount: parsed.amount },
       created_at: now.toISOString(),
     },
   ]);

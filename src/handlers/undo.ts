@@ -53,7 +53,8 @@ export async function handleUndo(userId: string, phone: string): Promise<string>
       user_id: userId,
       action: 'delete',
       transaction_id: transaction_id,
-      details: { description: transaction.description, amount: transaction.amount },
+      old_value: { description: transaction.description, amount: transaction.amount },
+      new_value: null,
       created_at: new Date().toISOString(),
     },
   ]);
