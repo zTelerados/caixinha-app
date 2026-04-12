@@ -1,0 +1,74 @@
+[
+  {
+    "date": "12 de abril de 2026",
+    "timestamp": "2026-04-12T23:03:54.560Z",
+    "overall": 64,
+    "commit": "03c6a2d",
+    "modules": {
+      "Bot WhatsApp / Conversacao": 100,
+      "Categorizacao Inteligente": 70,
+      "Banco de Dados / Persistencia": 87,
+      "Dashboard Web": 77,
+      "Acesso Mobile (PWA)": 80,
+      "Relatorios e Insights": 50,
+      "Identidade Visual / Branding": 35,
+      "Infraestrutura / Deploy": 65,
+      "Multi-usuario (preparacao)": 50,
+      "Integracao WhatsApp Oficial": 25
+    }
+  },
+  {
+    "date": "12 de abril de 2026",
+    "timestamp": "2026-04-12T23:06:00.647Z",
+    "overall": 65,
+    "commit": "03c6a2d",
+    "modules": {
+      "Bot WhatsApp / Conversacao": 100,
+      "Categorizacao Inteligente": 70,
+      "Banco de Dados / Persistencia": 87,
+      "Dashboard Web": 77,
+      "Acesso Mobile (PWA)": 80,
+      "Relatorios e Insights": 50,
+      "Identidade Visual / Branding": 35,
+      "Infraestrutura / Deploy": 80,
+      "Multi-usuario (preparacao)": 50,
+      "Integracao WhatsApp Oficial": 25
+    }
+  },
+  {
+    "date": "12 de abril de 2026",
+    "timestamp": "2026-04-12T23:17:52.051Z",
+    "overall": 65,
+    "commit": "03c6a2d",
+    "modules": {
+      "Bot WhatsApp / Conversacao": 100,
+      "Categorizacao Inteligente": 70,
+      "Banco de Dados / Persistencia": 87,
+      "Dashboard Web": 77,
+      "Acesso Mobile (PWA)": 80,
+      "Relatorios e Insights": 50,
+      "Identidade Visual / Branding": 35,
+      "Infraestrutura / Deploy": 80,
+      "Multi-usuario (preparacao)": 50,
+      "Integracao WhatsApp Oficial": 25
+    }
+  },
+  {
+    "date": "12 de abril de 2026",
+    "timestamp": "2026-04-12T23:17:54.049Z",
+    "overall": 65,
+    "commit": "03c6a2d",
+    "modules": {
+      "Bot WhatsApp / Conversacao": 100,
+      "Categorizacao Inteligente": 70,
+      "Banco de Dados / Persistencia": 87,
+      "Dashboard Web": 77,
+      "Acesso Mobile (PWA)": 80,
+      "Relatorios e Insights": 50,
+      "Identidade Visual / Branding": 35,
+      "Infraestrutura / Deploy": 80,
+      "Multi-usuario (preparacao)": 50,
+      "Integracao WhatsApp Oficial": 25
+    }
+  }
+]

@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "migrate": "npx tsx scripts/migrate-from-sheets.ts"
+    "migrate": "npx tsx scripts/migrate-from-sheets.ts",
+    "diagnose": "node scripts/diagnose.js",
+    "prepare": "husky"
   },
   "dependencies": {
     "next": "^14.2.0",
@@ -28,6 +30,7 @@
     "postcss": "^8.4.0",
     "autoprefixer": "^10.4.0",
     "tsx": "^4.16.0",
-    "googleapis": "^140.0.0"
+    "googleapis": "^140.0.0",
+    "husky": "^9.1.0"
   }
 }

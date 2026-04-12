@@ -1,0 +1,43 @@
+name: Auto-update Diagnostic
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - 'DIAGNOSTICO_CAIXINHA.md'
+      - 'diagnostico.html'
+      - 'diagnostic-history.json'
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Run diagnostic
+        run: node scripts/diagnose.js
+
+      - name: Check for changes
+        id: check
+        run: |
+          git diff --quiet DIAGNOSTICO_CAIXINHA.md diagnostico.html diagnostic-history.json || echo "changed=true" >> $GITHUB_OUTPUT
+
+      - name: Commit and push
+        if: steps.check.outputs.changed == 'true'
+        run: |
+          git config user.name "Caixinha Bot"
+          git config user.email "bot@caixinha.app"
+          git add DIAGNOSTICO_CAIXINHA.md diagnostico.html diagnostic-history.json
+          git commit -m "chore: auto-update diagnostic [skip ci]"
+          git push

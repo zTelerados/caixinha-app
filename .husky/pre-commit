@@ -1,0 +1,16 @@
+#!/usr/bin/env sh
+. "$(dirname -- "$0")/_/husky.sh" 2>/dev/null || true
+
+# ═══════════════════════════════════════════════════
+# CAIXINHA — Pre-commit: auto-update diagnostic
+# ═══════════════════════════════════════════════════
+
+echo "[caixinha] Atualizando diagnostico..."
+
+# Run diagnostic generator
+node scripts/diagnose.js
+
+# Stage the updated diagnostic files
+git add DIAGNOSTICO_CAIXINHA.md diagnostico.html diagnostic-history.json 2>/dev/null
+
+echo "[caixinha] Diagnostico atualizado e incluido no commit."
