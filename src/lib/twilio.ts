@@ -1,6 +1,6 @@
-const TWILIO_SID = process.env.TWILIO_ACCOUNT_SID!;
-const TWILIO_TOKEN = process.env.TWILIO_AUTH_TOKEN!;
-const TWILIO_FROM = process.env.TWILIO_WHATSAPP_NUMBER!;
+const TWILIO_SID = process.env.TWILIO_SID!;
+const TWILIO_TOKEN = process.env.TWILIO_TOKEN!;
+const TWILIO_FROM = process.env.TWILIO_NUMBER!;
 
 export async function sendWhatsApp(to: string, body: string): Promise<void> {
   const url = `https://api.twilio.com/2010-04-01/Accounts/${TWILIO_SID}/Messages.json`;
