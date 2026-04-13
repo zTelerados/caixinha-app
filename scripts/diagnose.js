@@ -187,6 +187,20 @@ ${getBlockers(modules)}
 
 ---
 
+## Decisoes Adiadas Conscientemente
+
+As decisoes abaixo nao sao pendencias — sao escolhas estrategicas feitas de forma consciente.
+
+| Decisao | Status | Razao |
+|---------|--------|-------|
+| **Identidade Visual / Branding** | Adiado | Refinamento visual vem depois que o produto esta funcionalmente fechado. Mudar paleta/logo agora geraria retrabalho quando novas features forem adicionadas. |
+| **Multi-usuario** | Adiado | O Caixinha precisa ser usado diariamente como produto pessoal antes de abrir pra familia/amigos. Auth, RLS por usuario e separacao de dados e uma rodada inteira de refatoracao. |
+| **WhatsApp Oficial (Meta API)** | Adiado | Depende de decisao de escalar pra outras pessoas. Twilio Sandbox atende perfeitamente o uso pessoal atual. Migracao pra Meta Cloud API so faz sentido com multi-usuario. |
+
+Esses modulos permanecem em 0% ou baixo percentual de forma proposital. Quando chegar a hora, cada um tera sua propria rodada de implementacao.
+
+---
+
 ## Historico de Versoes
 
 ${getVersionHistory()}

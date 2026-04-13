@@ -8,6 +8,7 @@
     "start": "next start",
     "migrate": "npx tsx scripts/migrate-from-sheets.ts",
     "diagnose": "node scripts/diagnose.js",
+    "backup": "node scripts/backup.js",
     "prepare": "husky"
   },
   "dependencies": {
