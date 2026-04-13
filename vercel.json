@@ -9,5 +9,9 @@
         { "key": "Access-Control-Allow-Methods", "value": "GET, POST, OPTIONS" }
       ]
     }
+  ],
+  "crons": [
+    { "path": "/api/cron/weekly", "schedule": "0 23 * * 0" },
+    { "path": "/api/cron/monthly", "schedule": "0 12 1 * *" }
   ]
 }

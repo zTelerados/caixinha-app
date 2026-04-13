@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import { Inter } from 'next/font/google';
 import './globals.css';
+import { ServiceWorkerRegister } from './sw-register';
 
 const inter = Inter({
   subsets: ['latin'],
@@ -11,9 +12,11 @@ const inter = Inter({
 export const metadata: Metadata = {
   title: 'Caixinha - Dashboard Financeiro',
   description: 'Gerencie suas finanças com inteligência',
+  manifest: '/manifest.json',
   icons: {
-    icon: '/favicon.ico',
-    shortcut: '/favicon.ico',
+    icon: '/icons/icon-192.png',
+    shortcut: '/icons/icon-192.png',
+    apple: '/icons/icon-192.png',
   },
   appleWebApp: {
     capable: true,
@@ -52,11 +55,13 @@ export default function RootLayout({
       <head>
         <meta charSet="utf-8" />
         <meta name="color-scheme" content="dark" />
+        <link rel="apple-touch-icon" href="/icons/icon-192.png" />
       </head>
       <body
         className={`${inter.variable} antialiased bg-caixa-bg text-caixa-text`}
       >
         {children}
+        <ServiceWorkerRegister />
       </body>
     </html>
   );

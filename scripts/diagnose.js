@@ -81,9 +81,13 @@ function evaluate() {
       return { id: check.id, desc: check.desc, weight: check.weight, passed };
     });
 
-    const totalWeight = checks.reduce((s, c) => s + c.weight, 0);
-    const earnedWeight = checks.reduce((s, c) => s + (c.passed ? c.weight : 0), 0);
-    const percent = totalWeight > 0 ? Math.round((earnedWeight / totalWeight) * 100) : 0;
+    const positiveChecks = checks.filter(c => c.weight > 0);
+    const penaltyChecks = checks.filter(c => c.weight < 0);
+    const totalWeight = positiveChecks.reduce((s, c) => s + c.weight, 0);
+    const earnedWeight = positiveChecks.reduce((s, c) => s + (c.passed ? c.weight : 0), 0);
+    const penaltyWeight = penaltyChecks.reduce((s, c) => s + (c.passed ? c.weight : 0), 0);
+    const rawPercent = totalWeight > 0 ? Math.round(((earnedWeight + penaltyWeight) / totalWeight) * 100) : 0;
+    const percent = Math.max(0, Math.min(100, rawPercent));
 
     results.push({ name: moduleName, percent, checks, earned: earnedWeight, total: totalWeight });
   }
@@ -121,7 +125,7 @@ function generateMarkdown(data) {
   const dateStr = now.toLocaleDateString('pt-BR', { day: 'numeric', month: 'long', year: 'numeric' });
 
   function makeBar(pct) {
-    const filled = Math.round(pct / 100 * 30);
+    const filled = Math.max(0, Math.min(30, Math.round(pct / 100 * 30)));
     const empty = 30 - filled;
     return '█'.repeat(filled) + '░'.repeat(empty);
   }
@@ -236,7 +240,8 @@ function printResults(data, prevHistory) {
   console.log('╚══════════════════════════════════════════════════╝\n');
 
   for (const m of modules) {
-    const bar = '█'.repeat(Math.round(m.percent / 5)) + '░'.repeat(20 - Math.round(m.percent / 5));
+    const filled = Math.max(0, Math.min(20, Math.round(m.percent / 5)));
+    const bar = '█'.repeat(filled) + '░'.repeat(20 - filled);
     const pctStr = `${m.percent}%`.padStart(4);
 
     let delta = '';

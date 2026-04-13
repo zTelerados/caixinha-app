@@ -56,6 +56,7 @@ export interface ParsedMessage {
   category_name: string | null;
   custom_date: boolean;
   month_label: string;
+  category_source?: 'keyword' | 'learned' | 'manual' | null;
 }
 
 export interface ParsedIncome {

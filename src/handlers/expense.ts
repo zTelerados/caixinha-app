@@ -2,6 +2,7 @@ import { supabaseAdmin } from '@/lib/supabase';
 import { sendWhatsApp } from '@/lib/twilio';
 import { fmtValor, friendlyName, monthLabel, fmtDate } from '@/lib/formatter';
 import { learnItem, getCategories } from '@/lib/categories';
+import { checkAnomalies } from '@/lib/anomaly';
 import { ParsedMessage, Transaction, ContextAnalysis } from '@/types';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -175,6 +176,10 @@ export async function handleExpense(
     const cat = cats.find((c) => c.id === parsed.category_id);
     if (cat) {
       response += ` em ${friendlyName(cat.name)} ${cat.emoji}`;
+      // Add confidence note if category came from learned items
+      if (parsed.category_source === 'learned') {
+        response += ' (aprendi da ultima vez)';
+      }
     }
   }
 
@@ -185,6 +190,12 @@ export async function handleExpense(
   }
 
   response += '.';
+
+  // Check for anomalies and send alert if triggered
+  const anomalyAlert = await checkAnomalies(userId, transaction);
+  if (anomalyAlert) {
+    await sendWhatsApp(phone, anomalyAlert);
+  }
 
   return response;
 }

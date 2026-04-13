@@ -195,17 +195,38 @@ export function parseExpense(msg: string, categories: Category[]): ParsedMessage
   // Category from text
   let categoryId: string | null = null;
   let categoryName: string | null = null;
+  let categorySource: 'keyword' | 'learned' | null = null;
   const txtCat = normalize(txt);
+
+  // First, check keywords
   for (const cat of categories) {
     for (const kw of cat.keywords || []) {
       const kwNorm = normalize(kw);
       if (txtCat.includes(kwNorm) || kwNorm.includes(txtCat)) {
         categoryId = cat.id;
         categoryName = cat.name;
+        categorySource = 'keyword';
         break;
       }
     }
     if (categoryId) break;
+  }
+
+  // Then, check learned_items if no keyword match
+  if (!categoryId) {
+    for (const cat of categories) {
+      const learned = (cat.learned_items as string[]) || [];
+      for (const item of learned) {
+        const itemNorm = normalize(item);
+        if (txtCat.includes(itemNorm) || itemNorm.includes(txtCat)) {
+          categoryId = cat.id;
+          categoryName = cat.name;
+          categorySource = 'learned';
+          break;
+        }
+      }
+      if (categoryId) break;
+    }
   }
 
   // Clean description
@@ -240,5 +261,6 @@ export function parseExpense(msg: string, categories: Category[]): ParsedMessage
     category_name: categoryName,
     custom_date: customDate,
     month_label: monthLabel(date),
+    category_source: categorySource,
   };
 }

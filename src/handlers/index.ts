@@ -1,6 +1,6 @@
 import { supabaseAdmin } from '@/lib/supabase';
 import { sendWhatsApp } from '@/lib/twilio';
-import { getCategories, suggestCategory } from '@/lib/categories';
+import { getCategories, suggestCategory, matchCategory } from '@/lib/categories';
 import {
   detectUndo,
   detectCorrection,
@@ -114,28 +114,36 @@ export async function routeMessage(phone: string, message: string): Promise<void
 
       // Check if category is missing
       if (!parsed.category_id) {
-        const suggested = await suggestCategory(parsed.description, user.id);
-        const newPending: PendingAction = {
-          id: uuidv4(),
-          user_id: user.id,
-          type: 'category',
-          payload: {
-            parsed,
-            suggestedCategoryId: suggested?.id,
-          },
-          expires_at: new Date(Date.now() + 5 * 60000).toISOString(),
-          created_at: new Date().toISOString(),
-        };
-        await supabaseAdmin.from('pending_actions').insert([newPending]);
-
-        if (suggested) {
-          response = `${parsed.description} de ${parsed.amount}. Tá em ${suggested.emoji} ${suggested.name}? (sim/não)`;
+        // Try to match using learned_items and fuzzy matching via matchCategory
+        const matched = await matchCategory(parsed.description, user.id);
+        if (matched) {
+          parsed.category_id = matched.id;
+          parsed.category_name = matched.name;
+          parsed.category_source = 'learned';
         } else {
-          response = `${parsed.description} de ${parsed.amount}. Em qual categoria? (alimentação, transporte, lazer...)`;
-        }
+          const suggested = await suggestCategory(parsed.description, user.id);
+          const newPending: PendingAction = {
+            id: uuidv4(),
+            user_id: user.id,
+            type: 'category',
+            payload: {
+              parsed,
+              suggestedCategoryId: suggested?.id,
+            },
+            expires_at: new Date(Date.now() + 5 * 60000).toISOString(),
+            created_at: new Date().toISOString(),
+          };
+          await supabaseAdmin.from('pending_actions').insert([newPending]);
 
-        await sendWhatsApp(phone, response);
-        return;
+          if (suggested) {
+            response = `${parsed.description} de ${parsed.amount}. Tá em ${suggested.emoji} ${suggested.name}? (sim/não)`;
+          } else {
+            response = `${parsed.description} de ${parsed.amount}. Em qual categoria? (alimentação, transporte, lazer...)`;
+          }
+
+          await sendWhatsApp(phone, response);
+          return;
+        }
       }
 
       // Check if payment method is missing

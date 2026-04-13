@@ -1,5 +1,5 @@
 import { supabaseAdmin } from '@/lib/supabase';
-import { resolveCategory, learnItem, invalidateCache } from '@/lib/categories';
+import { resolveCategory, learnItem, unlearnItem, invalidateCache } from '@/lib/categories';
 import { fmtValor, friendlyName } from '@/lib/formatter';
 import { ParsedCorrection, Transaction } from '@/types';
 
@@ -43,6 +43,11 @@ export async function handleCorrection(
   } else if (correction.type === 'category' && correction.term) {
     const newCategory = await resolveCategory(correction.term, userId);
     if (newCategory) {
+      // Remove from old category's learned_items if it exists
+      if (transaction.category_id) {
+        await unlearnItem(transaction.category_id, transaction.description);
+      }
+      // Add to new category's learned_items
       updatedCategoryId = newCategory.id;
       await learnItem(newCategory.id, transaction.description);
       invalidateCache();
