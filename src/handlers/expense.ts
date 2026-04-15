@@ -3,6 +3,7 @@ import { sendWhatsApp } from '@/lib/twilio';
 import { fmtValor, friendlyName, monthLabel, fmtDate } from '@/lib/formatter';
 import { learnItem, getCategories } from '@/lib/categories';
 import { checkAnomalies } from '@/lib/anomaly';
+import { syncTransactionInBackground } from '@/lib/sheets-sync';
 import { ParsedMessage, Transaction, ContextAnalysis } from '@/types';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -137,8 +138,11 @@ export async function handleExpense(
   const { error: txError } = await supabaseAdmin.from('transactions').insert([transaction]);
   if (txError) {
     console.error('Transaction insert error:', txError);
-    return 'Erro ao registrar gasto. Tenta de novo.';
+    return 'Nao consegui salvar agora. Manda de novo daqui a pouco.';
   }
+
+  // Espelho na planilha (background, nao trava a resposta)
+  syncTransactionInBackground(transaction);
 
   // Save for undo
   await supabaseAdmin

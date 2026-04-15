@@ -2,6 +2,7 @@ import { supabaseAdmin } from '@/lib/supabase';
 import { fmtValor } from '@/lib/formatter';
 import { ParsedIncome, Transaction } from '@/types';
 import { v4 as uuidv4 } from 'uuid';
+import { syncTransactionInBackground } from '@/lib/sheets-sync';
 
 export async function handleIncome(
   userId: string,
@@ -29,8 +30,11 @@ export async function handleIncome(
   const { error: txError } = await supabaseAdmin.from('transactions').insert([transaction]);
   if (txError) {
     console.error('Income insert error:', txError);
-    return 'Erro ao registrar entrada. Tenta de novo.';
+    return 'Nao consegui salvar agora. Manda de novo daqui a pouco.';
   }
+
+  // Espelho na planilha (background, nao trava a resposta)
+  syncTransactionInBackground(transaction);
 
   // Save for undo
   await supabaseAdmin
@@ -56,5 +60,5 @@ export async function handleIncome(
     },
   ]);
 
-  return `Entrada registrada. ${parsed.source}, ${fmtValor(parsed.amount)}. 💰`;
+  return `Entrada registrada. ${parsed.source}, ${fmtValor(parsed.amount)}.`;
 }

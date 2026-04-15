@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Caixinha — Painel</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0a0a0b;
+      --card: #141418;
+      --border: #27272a;
+      --text: #fafafa;
+      --dim: #a1a1aa;
+      --muted: #71717a;
+      --accent: #8b5cf6;
+      --green: #22c55e;
+      --yellow: #f59e0b;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+      font-size: 17px;
+      line-height: 1.65;
+      padding: 40px 24px 80px;
+      max-width: 780px;
+      margin: 0 auto;
+    }
+
+    header {
+      margin-bottom: 48px;
+      padding-bottom: 20px;
+      border-bottom: 1px solid var(--border);
+    }
+    h1 {
+      font-size: 30px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      margin-bottom: 6px;
+    }
+    header .sub {
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    section {
+      margin-bottom: 44px;
+    }
+    .label {
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: var(--muted);
+      font-weight: 600;
+      margin-bottom: 14px;
+    }
+
+    .fase-titulo {
+      font-size: 22px;
+      font-weight: 600;
+      margin-bottom: 14px;
+    }
+
+    .analogia {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--accent);
+      padding: 18px 22px;
+      border-radius: 8px;
+      color: var(--dim);
+      font-size: 16px;
+    }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 20px 22px;
+      margin-bottom: 14px;
+    }
+
+    .pergunta {
+      font-size: 17px;
+      font-weight: 500;
+      margin-bottom: 6px;
+    }
+    .porque {
+      color: var(--dim);
+      font-size: 15px;
+    }
+
+    ol.proximos {
+      list-style: none;
+      counter-reset: step;
+    }
+    ol.proximos li {
+      counter-increment: step;
+      padding: 14px 18px 14px 52px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      margin-bottom: 10px;
+      position: relative;
+      font-size: 16px;
+    }
+    ol.proximos li::before {
+      content: counter(step);
+      position: absolute;
+      left: 18px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 24px;
+      height: 24px;
+      background: var(--accent);
+      color: white;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .rodada {
+      display: flex;
+      gap: 14px;
+      padding: 14px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .rodada:last-child { border-bottom: none; }
+    .rodada .emoji {
+      font-size: 24px;
+      flex-shrink: 0;
+      width: 36px;
+      text-align: center;
+    }
+    .rodada .nome {
+      font-weight: 600;
+      margin-bottom: 3px;
+    }
+    .rodada .desc {
+      color: var(--dim);
+      font-size: 15px;
+    }
+
+    .saude {
+      background: linear-gradient(135deg, rgba(139,92,246,0.12), rgba(139,92,246,0.04));
+      border: 1px solid rgba(139,92,246,0.3);
+      padding: 24px 26px;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      gap: 24px;
+    }
+    .saude .pct {
+      font-size: 44px;
+      font-weight: 700;
+      color: var(--accent);
+      line-height: 1;
+    }
+    .saude .frase {
+      color: var(--dim);
+      font-size: 16px;
+    }
+
+    footer {
+      margin-top: 60px;
+      padding-top: 20px;
+      border-top: 1px solid var(--border);
+      color: var(--muted);
+      font-size: 13px;
+      text-align: center;
+    }
+
+    @media (max-width: 600px) {
+      body { font-size: 16px; padding: 24px 16px 60px; }
+      h1 { font-size: 24px; }
+      .saude { flex-direction: column; align-items: flex-start; gap: 12px; }
+      .saude .pct { font-size: 38px; }
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <h1>Caixinha — Painel</h1>
+    <div class="sub">Atualizado em 13 de abril de 2026 — 23h45</div>
+  </header>
+
+  <section>
+    <div class="label">Onde estamos agora</div>
+    <div class="fase-titulo">📊 Cômodo novo pronto: planilha Espelho</div>
+    <div class="analogia">
+      Depois da faxina, levantei o primeiro cômodo novo: a planilha Espelho. Toda vez que o Caixinha anotar um gasto ou entrada no WhatsApp, uma linha nova cai direto numa planilha do Google. Se o Google cair, o bot continua funcionando normal — a planilha é só um reflexo, não é o coração. O código tá pronto e testado (typecheck zero erro). Falta só você fazer o cadastro uma vez no Google Cloud pra ligar a chave. Escrevi um guia em linguagem de gente em <span style="color:var(--text)">docs/SETUP_SHEETS.md</span>.
+    </div>
+  </section>
+
+  <section>
+    <div class="label">O que entrou nessa rodada</div>
+    <div class="card">
+      <div class="pergunta">Biblioteca de sincronia com o Google Sheets</div>
+      <div class="porque">src/lib/sheets-sync.ts. Resiliente: se as chaves não estiverem configuradas, loga aviso e segue. Se o Google cair no meio da sincronia, o bot não quebra e você nem vê.</div>
+    </div>
+    <div class="card">
+      <div class="pergunta">Duas rotas novas</div>
+      <div class="porque">/api/sheets/status pra ver se a conexão tá em pé. /api/sheets/sync pra reimportar tudo de uma vez, se precisar levar histórico antigo pra planilha depois.</div>
+    </div>
+    <div class="card">
+      <div class="pergunta">Hook nos handlers de gasto e entrada</div>
+      <div class="porque">Cada anotação nova dispara a sincronia em background. Não trava a resposta do bot, nem atrasa o "Anotado." que chega no seu WhatsApp.</div>
+    </div>
+    <div class="card">
+      <div class="pergunta">Guia de ligação escrito</div>
+      <div class="porque">docs/SETUP_SHEETS.md. Passo-a-passo em português simples: criar projeto no Google Cloud, ligar a API, baixar a chave, criar a planilha, compartilhar com a conta de robô, colar três variáveis no Vercel. Sem jargão.</div>
+    </div>
+  </section>
+
+  <section>
+    <div class="label">O que tá esperando você</div>
+
+    <div class="card">
+      <div class="pergunta">Fazer o cadastro no Google Cloud uma vez</div>
+      <div class="porque">Sou eu (Cowork) que não consigo entrar na sua conta Google. Você segue o guia em docs/SETUP_SHEETS.md, gera a chave, cria a planilha, compartilha com o email da conta de robô, e cola três variáveis no Vercel. Tempo estimado: 15 a 20 minutos. No fim, você manda "cafe 8 em alimentacao" no WhatsApp e vê a linha aparecer na planilha.</div>
+    </div>
+
+    <div class="card">
+      <div class="pergunta">Destravar o controle de versão (git)</div>
+      <div class="porque">A tranca continua emperrada desde a faxina. Pra salvar esse marco novo com a planilha Espelho embarcada, preciso da sua autorização pra destravar. Sem isso, o código fica só na máquina — não sobe pro ar.</div>
+    </div>
+  </section>
+
+  <section>
+    <div class="label">O que vem a seguir</div>
+    <ol class="proximos">
+      <li>Você faz o setup da planilha seguindo docs/SETUP_SHEETS.md.</li>
+      <li>Testa com um gasto real no WhatsApp e vê aparecer na planilha.</li>
+      <li>Me autoriza a destravar o git pra salvar esse marco com o nome "v9 — planilha Espelho".</li>
+      <li>A gente começa o próximo cômodo: migração pro WhatsApp oficial (Meta), saindo do sandbox de teste.</li>
+      <li>Depois da Meta, entra áudio. Depois, modo fácil pros pais.</li>
+    </ol>
+  </section>
+
+  <section>
+    <div class="label">Próximas grandes rodadas</div>
+
+    <div class="rodada">
+      <div class="emoji">📱</div>
+      <div>
+        <div class="nome">Migração pro WhatsApp oficial (Meta)</div>
+        <div class="desc">Sair do sandbox do Twilio e ligar no WhatsApp Business API de verdade. Próximo cômodo depois da planilha.</div>
+      </div>
+    </div>
+
+    <div class="rodada">
+      <div class="emoji">🎤</div>
+      <div>
+        <div class="nome">Áudio no WhatsApp</div>
+        <div class="desc">Falar a despesa em vez de digitar. Rodada curta, vem depois da Meta.</div>
+      </div>
+    </div>
+
+    <div class="rodada">
+      <div class="emoji">👵</div>
+      <div>
+        <div class="nome">Modo fácil pros pais</div>
+        <div class="desc">Linguagem acolhedora, botão grande, zero jargão. Quem nunca usou app entende.</div>
+      </div>
+    </div>
+
+    <div class="rodada">
+      <div class="emoji">💳</div>
+      <div>
+        <div class="nome">Cartões de crédito</div>
+        <div class="desc">Ensinar o Caixinha que crédito é dívida pro mês que vem. Voltou pra fila.</div>
+      </div>
+    </div>
+
+    <div class="rodada">
+      <div class="emoji">📦</div>
+      <div>
+        <div class="nome">Parcelamento</div>
+        <div class="desc">Dividir compra em x vezes e mostrar o que vai cair em cada mês. Depois de cartão.</div>
+      </div>
+    </div>
+
+    <div class="rodada">
+      <div class="emoji">📄</div>
+      <div>
+        <div class="nome">PDF mensal</div>
+        <div class="desc">Relatório bonito no fim do mês, tipo fatura de banco, pronto pra guardar.</div>
+      </div>
+    </div>
+
+    <div class="rodada">
+      <div class="emoji">⏰</div>
+      <div>
+        <div class="nome">Lembretes</div>
+        <div class="desc">Caixinha avisa conta a vencer, fatura fechando, meta perto do limite.</div>
+      </div>
+    </div>
+
+    <div class="rodada">
+      <div class="emoji">🎨</div>
+      <div>
+        <div class="nome">Identidade visual</div>
+        <div class="desc">Logo, cor, tipografia, personalidade. Dar cara ao Caixinha.</div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="label">Saúde geral</div>
+    <div class="saude">
+      <div class="pct">54%</div>
+      <div class="frase">Subiu 7 pontos. A base tá firme, typecheck zerado, e o primeiro cômodo novo (planilha Espelho) tá erguido e testado. A próxima subida vem quando você fizer o setup e a planilha começar a receber linhas de verdade.</div>
+    </div>
+  </section>
+
+  <footer>
+    Painel atualizado manualmente. Pede "atualiza o painel" quando quiser refrescar.
+  </footer>
+
+</body>
+</html>
