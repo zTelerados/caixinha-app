@@ -13,8 +13,24 @@ import { supabaseAdmin } from './supabase';
 import type { Transaction } from '@/types';
 
 const SPREADSHEET_ID = process.env.GOOGLE_SHEETS_SPREADSHEET_ID;
-const SERVICE_EMAIL = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
-const SERVICE_KEY = process.env.GOOGLE_SERVICE_ACCOUNT_KEY;
+const SERVICE_JSON_RAW = process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
+
+function parseJsonEnv(): { email: string; key: string } | null {
+  if (!SERVICE_JSON_RAW) return null;
+  try {
+    const parsed = JSON.parse(SERVICE_JSON_RAW);
+    if (parsed && parsed.client_email && parsed.private_key) {
+      return { email: parsed.client_email, key: parsed.private_key };
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+const fromJson = parseJsonEnv();
+const SERVICE_EMAIL = fromJson?.email || process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
+const SERVICE_KEY = fromJson?.key || process.env.GOOGLE_SERVICE_ACCOUNT_KEY;
 
 const TAB_TRANSACTIONS = 'Transacoes';
 
