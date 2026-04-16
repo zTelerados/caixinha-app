@@ -17,6 +17,8 @@ import { handleQuery } from './query';
 import { handleCategoryCommand } from './category-command';
 import { handlePending } from './pending';
 import { handleExpense } from './expense';
+import { handleOnboarding, getOnboardingClosing } from './onboarding';
+import { handleConfig } from './config';
 import { createDebugContext } from '@/lib/debug-log';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -34,14 +36,30 @@ export async function routeMessage(
   let dbg: ReturnType<typeof createDebugContext> | null = null;
 
   try {
+    // Onboarding check
+    const { data: existingUser } = await supabaseAdmin
+      .from('users')
+      .select('*')
+      .eq('phone', phone)
+      .single();
+
+    if (!existingUser || (existingUser.onboarding_step !== null && existingUser.onboarding_step < 5)) {
+      const ob = await handleOnboarding(phone, message);
+      if (!ob.done) {
+        await sendWhatsApp(phone, ob.response);
+        return;
+      }
+      if (!ob.userId) return;
+    }
+
     const { data: user } = await supabaseAdmin
       .from('users')
       .select('*')
       .eq('phone', phone)
       .single();
 
-    if (user === null || user === undefined) {
-      await sendWhatsApp(phone, 'N\u00famero n\u00e3o autorizado.');
+    if (!user) {
+      await sendWhatsApp(phone, 'Erro interno. Tenta de novo.');
       return;
     }
 
@@ -51,6 +69,7 @@ export async function routeMessage(
     }
 
     const categories = await getCategories(user.id);
+    const onboardingStep = user.onboarding_step;
 
     // Clean expired pending actions
     const { data: pendingList } = await supabaseAdmin
@@ -63,6 +82,22 @@ export async function routeMessage(
       if (new Date(p.expires_at) < now) {
         await supabaseAdmin.from('pending_actions').delete().eq('id', p.id);
       }
+    }
+
+    const maybeAppendClosing = (response: string): string => {
+      const closing = getOnboardingClosing(onboardingStep, user.name);
+      return closing ? response + closing : response;
+    };
+
+    // Priority 0: Config commands
+    const configResult = await handleConfig(user.id, message);
+    if (configResult.matched) {
+      dbg.setIntent('config');
+      dbg.setHandler('handleConfig');
+      const sent = await send(configResult.response);
+      dbg.setResponse(sent);
+      await dbg.flush();
+      return;
     }
 
     // Priority 1: Undo
@@ -88,10 +123,10 @@ export async function routeMessage(
     if (pending && pending.length > 0) {
       const p = pending[0];
       dbg.setIntent('pending_response');
-      dbg.setPending(JSON.stringify({ type: p.type, id: p.id, payload_keys: Object.keys(p.payload || {}) }));
+      dbg.setPending(JSON.stringify({ type: p.type, id: p.id }));
       dbg.setHandler('handlePending');
       const response = await handlePending(user.id, phone, message, p);
-      const sent = await send(response);
+      const sent = await send(maybeAppendClosing(response));
       dbg.setResponse(sent);
       await dbg.flush();
       return;
@@ -117,7 +152,7 @@ export async function routeMessage(
       dbg.setHandler('handleIncome');
       dbg.setParsed({ source: income.source, amount: income.amount });
       const response = await handleIncome(user.id, income, phone);
-      const sent = await send(response);
+      const sent = await send(maybeAppendClosing(response));
       dbg.setResponse(sent);
       await dbg.flush();
       return;
@@ -184,9 +219,9 @@ export async function routeMessage(
 
           dbg.setHandler('ask_category');
           if (suggested) {
-            response = parsed.description + ' de ' + parsed.amount + '. T\u00e1 em ' + suggested.emoji + ' ' + suggested.name + '? (sim/n\u00e3o)';
+            response = `${parsed.description} de ${parsed.amount}. T\u00e1 em ${suggested.emoji} ${suggested.name}? (sim/n\u00e3o)`;
           } else {
-            response = parsed.description + ' de ' + parsed.amount + '. Em qual categoria? (alimenta\u00e7\u00e3o, transporte, lazer...)';
+            response = `${parsed.description} de ${parsed.amount}. Em qual categoria? (alimenta\u00e7\u00e3o, transporte, lazer...)`;
           }
 
           const sent = await send(response);
@@ -197,27 +232,31 @@ export async function routeMessage(
       }
 
       if (parsed.payment_method === null || parsed.payment_method === undefined) {
-        const newPending: PendingAction = {
-          id: uuidv4(),
-          user_id: user.id,
-          type: 'payment_method',
-          payload: { parsed },
-          expires_at: new Date(Date.now() + 10 * 60000).toISOString(),
-          created_at: new Date().toISOString(),
-        };
-        await supabaseAdmin.from('pending_actions').insert([newPending]);
+        if (user.default_payment) {
+          parsed.payment_method = user.default_payment;
+        } else {
+          const newPending: PendingAction = {
+            id: uuidv4(),
+            user_id: user.id,
+            type: 'payment_method',
+            payload: { parsed },
+            expires_at: new Date(Date.now() + 10 * 60000).toISOString(),
+            created_at: new Date().toISOString(),
+          };
+          await supabaseAdmin.from('pending_actions').insert([newPending]);
 
-        dbg.setHandler('ask_payment_method');
-        response = 'Cr\u00e9dito, pix ou dinheiro?';
-        const sent = await send(response);
-        dbg.setResponse(sent);
-        await dbg.flush();
-        return;
+          dbg.setHandler('ask_payment_method');
+          response = 'Cr\u00e9dito, pix ou dinheiro?';
+          const sent = await send(response);
+          dbg.setResponse(sent);
+          await dbg.flush();
+          return;
+        }
       }
 
       dbg.setHandler('handleExpense');
       response = await handleExpense(user.id, parsed, phone);
-      const sent = await send(response);
+      const sent = await send(maybeAppendClosing(response));
       dbg.setResponse(sent);
       await dbg.flush();
       return;

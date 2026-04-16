@@ -22,6 +22,7 @@ export default function DebugPage() {
   const [error, setError] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [autoRefresh, setAutoRefresh] = useState(true);
+  const [filter, setFilter] = useState('');
 
   const fetchLogs = async () => {
     try {
@@ -91,6 +92,17 @@ export default function DebugPage() {
               />
               Auto-refresh 5s
             </label>
+            <input
+              type="text"
+              placeholder="Filtrar..."
+              value={filter}
+              onChange={(e) => setFilter(e.target.value)}
+              style={{
+                background: '#27272a', border: '1px solid #3f3f46', color: '#fafafa',
+                padding: '6px 12px', borderRadius: 6, fontSize: 13, width: 180,
+                outline: 'none',
+              }}
+            />
             <button
               onClick={fetchLogs}
               style={{
@@ -123,7 +135,17 @@ export default function DebugPage() {
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {logs.map((log) => (
+            {logs.filter((log) => {
+              if (!filter) return true;
+              const f = filter.toLowerCase();
+              return (
+                (log.incoming_message || '').toLowerCase().includes(f) ||
+                (log.detected_intent || '').toLowerCase().includes(f) ||
+                (log.handler_used || '').toLowerCase().includes(f) ||
+                (log.response_sent || '').toLowerCase().includes(f) ||
+                (log.error || '').toLowerCase().includes(f)
+              );
+            }).map((log) => (
               <div
                 key={log.id}
                 onClick={() => setExpandedId(expandedId === log.id ? null : log.id)}

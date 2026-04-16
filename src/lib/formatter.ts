@@ -23,6 +23,20 @@ export function normalize(s: string): string {
   return s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 }
 
+const LEADING_PREPS = /^(de|do|da|dos|das|no|na|nos|nas|em|com|pra|pro|para|ao|\u00e0|uns|umas|um|uma)\s+/i;
+
+export function normalizeDescription(raw: string): string {
+  let s = raw.trim();
+  for (let i = 0; i < 3; i++) {
+    const before = s;
+    s = s.replace(LEADING_PREPS, '');
+    if (s === before) break;
+  }
+  s = s.replace(/\s+/g, ' ').trim();
+  if (!s) return raw.trim();
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
 export function getLastDayOfWeek(dayOfWeek: number): Date {
   const now = new Date();
   let diff = now.getDay() - dayOfWeek;

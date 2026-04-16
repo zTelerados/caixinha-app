@@ -1,6 +1,4 @@
-// ════════════════════════════════════════════════════════════
-// CAIXINHA v8 — Type definitions
-// ════════════════════════════════════════════════════════════
+// Caixinha v9 — Type definitions
 
 export interface User {
   id: string;
@@ -8,6 +6,8 @@ export interface User {
   name: string;
   tone: string;
   month_start_day: number;
+  default_payment: string | null;
+  onboarding_step: number | null;
   created_at: string;
 }
 
@@ -34,7 +34,6 @@ export interface Transaction {
   month_label: string;
   created_at: string;
   updated_at: string;
-  // joined
   category?: Category;
 }
 
@@ -75,8 +74,8 @@ export interface ParsedCorrection {
 export interface QueryResult {
   type: 'summary' | 'week' | 'today' | 'yesterday' | 'balance' | 'category' | 'biggest' | 'last_n' | 'compare' | 'daily_avg' | 'remaining' | 'status';
   term?: string;
-  term2?: string; // for compare queries
-  count?: number; // for last_n
+  term2?: string;
+  count?: number;
 }
 
 export interface CategoryCommand {
@@ -108,20 +107,19 @@ export interface HandlerResult {
   handled: boolean;
 }
 
-// Month names in Portuguese
 export const MONTHS: Record<number, string> = {
-  1: 'Janeiro', 2: 'Fevereiro', 3: 'Março', 4: 'Abril',
+  1: 'Janeiro', 2: 'Fevereiro', 3: 'Mar\u00e7o', 4: 'Abril',
   5: 'Maio', 6: 'Junho', 7: 'Julho', 8: 'Agosto',
   9: 'Setembro', 10: 'Outubro', 11: 'Novembro', 12: 'Dezembro',
 };
 
 export const FRIENDLY_NAMES: Record<string, string> = {
-  'iFood / Restaurante': 'alimentação',
+  'iFood / Restaurante': 'alimenta\u00e7\u00e3o',
   'Uber / Transporte': 'transporte',
   'Mercado': 'mercado',
   'Lazer': 'lazer',
   'Roupa': 'roupa',
   'Assinaturas': 'assinaturas',
-  'Saúde': 'saúde',
+  'Sa\u00fade': 'sa\u00fade',
   'Weed': 'weed',
 };
