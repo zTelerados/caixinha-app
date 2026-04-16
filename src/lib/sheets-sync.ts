@@ -56,7 +56,7 @@ function getSheetsClient(): sheets_v4.Sheets | null {
   const jwt = new google.auth.JWT({
     email: SERVICE_EMAIL,
     key: privateKey,
-    scopes: ['https://www.googleapis.com/auth/spreadsheets'],
+    scopes: ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive'],
   });
   cachedSheets = google.sheets({ version: 'v4', auth: jwt });
   return cachedSheets;
