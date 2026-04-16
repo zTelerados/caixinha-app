@@ -1,116 +1,12 @@
 import { supabaseAdmin } from '@/lib/supabase';
 import { sendWhatsApp } from '@/lib/twilio';
-import { fmtValor, friendlyName, monthLabel, fmtDate } from '@/lib/formatter';
+import { monthLabel } from '@/lib/formatter';
 import { learnItem, getCategories } from '@/lib/categories';
 import { checkAnomalies } from '@/lib/anomaly';
 import { syncTransactionInBackground } from '@/lib/sheets-sync';
-import { ParsedMessage, Transaction, ContextAnalysis } from '@/types';
+import { buildExpenseResponse, ExpenseResponseParams } from '@/lib/responses';
+import { ParsedMessage, Transaction } from '@/types';
 import { v4 as uuidv4 } from 'uuid';
-
-async function analyzeContext(
-  userId: string,
-  transaction: Transaction
-): Promise<ContextAnalysis> {
-  const now = new Date();
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-
-  // Total for the month
-  const { data: monthTxs } = await supabaseAdmin
-    .from('transactions')
-    .select('amount, category_id, date')
-    .eq('user_id', userId)
-    .eq('type', 'expense')
-    .eq('month_label', monthLabel(now))
-    .gte('date', monthStart.toISOString());
-
-  const totalMonth = (monthTxs || []).reduce((sum, tx) => sum + tx.amount, 0);
-  const income = await supabaseAdmin
-    .from('transactions')
-    .select('amount')
-    .eq('user_id', userId)
-    .eq('type', 'income')
-    .eq('month_label', monthLabel(now))
-    .gte('date', monthStart.toISOString());
-
-  const totalIncome = (income.data || []).reduce((sum, tx) => sum + tx.amount, 0);
-  const balance = totalIncome - totalMonth;
-
-  // Category analysis
-  const categoryTxs = (monthTxs || []).filter((tx) => tx.category_id === transaction.category_id);
-  const totalCategory = categoryTxs.reduce((sum, tx) => sum + tx.amount, 0);
-  const countCategory = categoryTxs.length;
-
-  // Week analysis
-  const weekStart = new Date(now.getTime() - 7 * 86400000);
-  const { data: weekTxs } = await supabaseAdmin
-    .from('transactions')
-    .select('category_id, amount')
-    .eq('user_id', userId)
-    .eq('type', 'expense')
-    .eq('month_label', monthLabel(now))
-    .gte('date', weekStart.toISOString());
-
-  const countCategoryWeek = (weekTxs || []).filter((tx) => tx.category_id === transaction.category_id).length;
-
-  // Today
-  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const todayTxs = (monthTxs || []).filter((tx) => new Date(tx.date || '').toDateString() === todayStart.toDateString());
-  const countToday = todayTxs.length;
-
-  // Top category
-  const categoryTotals = new Map<string, number>();
-  (monthTxs || []).forEach((tx) => {
-    if (tx.category_id) {
-      categoryTotals.set(tx.category_id, (categoryTotals.get(tx.category_id) || 0) + tx.amount);
-    }
-  });
-
-  let topCategory: string | null = null;
-  let topCategoryTotal = 0;
-  for (const [catId, total] of categoryTotals) {
-    if (total > topCategoryTotal) {
-      topCategory = catId;
-      topCategoryTotal = total;
-    }
-  }
-
-  const pctCategory = totalMonth > 0 ? (totalCategory / totalMonth) * 100 : 0;
-  const avgCategory = countCategory > 0 ? totalCategory / countCategory : 0;
-
-  let insight: string | null = null;
-  let showContext = false;
-
-  // Insights
-  if (totalCategory > avgCategory * 1.5) {
-    insight = 'acima da média nessa categoria';
-    showContext = true;
-  } else if (topCategory === transaction.category_id && countCategory === 1) {
-    insight = 'primeira vez nessa categoria este mês';
-    showContext = true;
-  } else if (topCategory === transaction.category_id && countCategory > 1) {
-    insight = 'ainda é a categoria com mais gasto';
-    showContext = true;
-  } else if (totalMonth > totalIncome && balance < 0) {
-    insight = 'ó que já gastou mais que ganhou este mês';
-    showContext = true;
-  }
-
-  return {
-    totalMonth,
-    totalCategory,
-    countCategory,
-    countCategoryWeek,
-    countToday,
-    income: totalIncome,
-    balance,
-    topCategory,
-    topCategoryTotal,
-    pctCategory,
-    avgCategory,
-    showContext,
-    insight,
-  };
-}
 
 export async function handleExpense(
   userId: string,
@@ -173,27 +69,91 @@ export async function handleExpense(
     await learnItem(parsed.category_id, parsed.description);
   }
 
-  // Build response
-  let response = `Anotado. ${parsed.description}, ${fmtValor(parsed.amount)}`;
+  // Fetch user data (name + tone)
+  const { data: userData } = await supabaseAdmin
+    .from('users')
+    .select('name, tone')
+    .eq('id', userId)
+    .single();
+
+  const userName = userData?.name || 'amigo';
+  const tone = userData?.tone || 'cria';
+
+  // Resolve category name + emoji
+  let categoryName: string | null = null;
+  let categoryEmoji: string | null = null;
   if (parsed.category_id) {
     const cats = await getCategories(userId);
     const cat = cats.find((c) => c.id === parsed.category_id);
     if (cat) {
-      response += ` em ${friendlyName(cat.name)} ${cat.emoji}`;
-      // Add confidence note if category came from learned items
-      if (parsed.category_source === 'learned') {
-        response += ' (aprendi da ultima vez)';
-      }
+      categoryName = cat.name;
+      categoryEmoji = cat.emoji;
     }
   }
 
-  // Analyze context
-  const ctx = await analyzeContext(userId, transaction);
-  if (ctx.showContext && ctx.insight) {
-    response += `. ${ctx.insight}`;
+  // Category history — last 5 expenses in same category this month
+  let categoryHistory: Array<{ description: string; amount: number; date: string }> = [];
+  if (parsed.category_id) {
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const { data: catTxs } = await supabaseAdmin
+      .from('transactions')
+      .select('description, amount, date')
+      .eq('user_id', userId)
+      .eq('type', 'expense')
+      .eq('category_id', parsed.category_id)
+      .eq('month_label', monthLabel(now))
+      .gte('date', monthStart.toISOString())
+      .order('date', { ascending: false })
+      .limit(5);
+
+    categoryHistory = (catTxs || []).map((tx) => ({
+      description: tx.description,
+      amount: tx.amount,
+      date: tx.date,
+    }));
   }
 
-  response += '.';
+  // Month totals — expense sum + income sum
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+
+  const { data: expenseTxs } = await supabaseAdmin
+    .from('transactions')
+    .select('amount')
+    .eq('user_id', userId)
+    .eq('type', 'expense')
+    .eq('month_label', monthLabel(now))
+    .gte('date', monthStart.toISOString());
+
+  const monthTotal = (expenseTxs || []).reduce((sum, tx) => sum + tx.amount, 0);
+
+  const { data: incomeTxs } = await supabaseAdmin
+    .from('transactions')
+    .select('amount')
+    .eq('user_id', userId)
+    .eq('type', 'income')
+    .eq('month_label', monthLabel(now))
+    .gte('date', monthStart.toISOString());
+
+  const monthIncome = (incomeTxs || []).reduce((sum, tx) => sum + tx.amount, 0);
+  const balance = monthIncome - monthTotal;
+
+  // Build response using the new template system
+  const responseParams: ExpenseResponseParams = {
+    userName,
+    description: parsed.description,
+    amount: parsed.amount,
+    categoryName,
+    categoryEmoji,
+    paymentMethod: parsed.payment_method || null,
+    date: parsed.date,
+    tone,
+    categoryHistory,
+    monthTotal,
+    monthIncome,
+    balance,
+  };
+
+  const response = buildExpenseResponse(responseParams);
 
   // Check for anomalies and send alert if triggered
   const anomalyAlert = await checkAnomalies(userId, transaction);

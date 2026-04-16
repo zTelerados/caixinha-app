@@ -166,6 +166,52 @@
       font-size: 16px;
     }
 
+    .barra-container {
+      margin-bottom: 12px;
+    }
+    .barra-label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 14px;
+      margin-bottom: 5px;
+    }
+    .barra-label span:first-child {
+      color: var(--dim);
+    }
+    .barra-label span:last-child {
+      color: var(--text);
+      font-weight: 600;
+    }
+    .barra {
+      height: 8px;
+      background: var(--border);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+    .barra-fill {
+      height: 100%;
+      border-radius: 4px;
+      transition: width 0.3s ease;
+    }
+    .barra-fill.green { background: var(--green); }
+    .barra-fill.yellow { background: var(--yellow); }
+    .barra-fill.accent { background: var(--accent); }
+    .barra-fill.muted { background: var(--muted); }
+
+    .alerta {
+      background: var(--card);
+      border: 1px solid var(--yellow);
+      border-left: 3px solid var(--yellow);
+      padding: 14px 18px;
+      border-radius: 8px;
+      color: var(--dim);
+      font-size: 15px;
+      margin-bottom: 14px;
+    }
+    .alerta strong {
+      color: var(--yellow);
+    }
+
     footer {
       margin-top: 60px;
       padding-top: 20px;
@@ -187,118 +233,185 @@
 
   <header>
     <h1>Caixinha — Painel</h1>
-    <div class="sub">Atualizado em 13 de abril de 2026 — 23h45</div>
+    <div class="sub">Atualizado em 16 de abril de 2026 — 00h00</div>
   </header>
 
   <section>
     <div class="label">Onde estamos agora</div>
-    <div class="fase-titulo">📊 Cômodo novo pronto: planilha Espelho</div>
+    <div class="fase-titulo">🚀 De bot basico a assistente de verdade</div>
     <div class="analogia">
-      Depois da faxina, levantei o primeiro cômodo novo: a planilha Espelho. Toda vez que o Caixinha anotar um gasto ou entrada no WhatsApp, uma linha nova cai direto numa planilha do Google. Se o Google cair, o bot continua funcionando normal — a planilha é só um reflexo, não é o coração. O código tá pronto e testado (typecheck zero erro). Falta só você fazer o cadastro uma vez no Google Cloud pra ligar a chave. Escrevi um guia em linguagem de gente em <span style="color:var(--text)">docs/SETUP_SHEETS.md</span>.
+      O Caixinha deixou de ser um anotador e virou um assistente financeiro completo. Agora ele responde com contexto rico (confirmacao + historico da categoria + resumo do mes), entende 15 tipos de pergunta em linguagem natural, transcreve audio, manda resumo automatico todo dia de manha e fechamento semanal no domingo. Tudo com dois tons de voz (cria e neutro) prontos pra quando tiver mais de um usuario. A planilha Espelho continua sincronizando em tempo real. O bot saiu de 61% pra <span style="color:var(--text)">67% de progresso geral</span>.
     </div>
   </section>
 
   <section>
     <div class="label">O que entrou nessa rodada</div>
     <div class="card">
-      <div class="pergunta">Biblioteca de sincronia com o Google Sheets</div>
-      <div class="porque">src/lib/sheets-sync.ts. Resiliente: se as chaves não estiverem configuradas, loga aviso e segue. Se o Google cair no meio da sincronia, o bot não quebra e você nem vê.</div>
+      <div class="pergunta">Respostas ricas e estruturadas</div>
+      <div class="porque">Cada registro de gasto ou entrada agora volta com 3 camadas: confirmacao com todos os detalhes, contexto da categoria (ultimos 3-5 itens + subtotal), e resumo mensal com saldo. Link pro dashboard no final.</div>
     </div>
     <div class="card">
-      <div class="pergunta">Duas rotas novas</div>
-      <div class="porque">/api/sheets/status pra ver se a conexão tá em pé. /api/sheets/sync pra reimportar tudo de uma vez, se precisar levar histórico antigo pra planilha depois.</div>
+      <div class="pergunta">15 consultas em linguagem natural</div>
+      <div class="porque">O bot entende: "quanto gastei esse mes", "quanto gastei com mercado", "quanto gastei ontem/hoje/essa semana", "qual meu saldo", "qual meu maior gasto", "me mostra os ultimos 5 gastos", "gastei mais com X ou Y", "qual meu gasto medio por dia", "quanto sobra pro resto do mes", "to no vermelho?", "como to no mes?" — entre outros.</div>
     </div>
     <div class="card">
-      <div class="pergunta">Hook nos handlers de gasto e entrada</div>
-      <div class="porque">Cada anotação nova dispara a sincronia em background. Não trava a resposta do bot, nem atrasa o "Anotado." que chega no seu WhatsApp.</div>
+      <div class="pergunta">Mensagem matinal automatica (8h BRT)</div>
+      <div class="porque">Todo dia as 8h, o bot manda um resumo: quanto gastou ontem, totais do mes, saldo atual, contas pendentes. Sem voce pedir nada.</div>
     </div>
     <div class="card">
-      <div class="pergunta">Guia de ligação escrito</div>
-      <div class="porque">docs/SETUP_SHEETS.md. Passo-a-passo em português simples: criar projeto no Google Cloud, ligar a API, baixar a chave, criar a planilha, compartilhar com a conta de robô, colar três variáveis no Vercel. Sem jargão.</div>
+      <div class="pergunta">Fechamento semanal (domingo 20h BRT)</div>
+      <div class="porque">Resumo automatico todo domingo: total da semana, comparacao com semana anterior, itens mais caros, dia mais pesado.</div>
+    </div>
+    <div class="card">
+      <div class="pergunta">Transcricao de audio via Whisper</div>
+      <div class="porque">Manda audio no WhatsApp e o bot transcreve e processa. Confirma com "🎤 Ouvi: ..." antes de anotar. Precisa de OPENAI_API_KEY configurada no Vercel.</div>
+    </div>
+    <div class="card">
+      <div class="pergunta">Sistema de tom duplo (cria / neutro)</div>
+      <div class="porque">Todas as respostas tem versao casual/carioca e versao polida/formal. Preparacao pra multi-usuario com preferencias diferentes.</div>
+    </div>
+    <div class="card">
+      <div class="pergunta">Google Sheets Espelho funcionando</div>
+      <div class="porque">Sincronia em tempo real confirmada. Cada transacao vai pra planilha automaticamente. Formatada com cabecalhos, cores e moeda.</div>
     </div>
   </section>
 
   <section>
-    <div class="label">O que tá esperando você</div>
+    <div class="label">O que ta esperando voce testar</div>
 
     <div class="card">
-      <div class="pergunta">Fazer o cadastro no Google Cloud uma vez</div>
-      <div class="porque">Sou eu (Cowork) que não consigo entrar na sua conta Google. Você segue o guia em docs/SETUP_SHEETS.md, gera a chave, cria a planilha, compartilha com o email da conta de robô, e cola três variáveis no Vercel. Tempo estimado: 15 a 20 minutos. No fim, você manda "cafe 8 em alimentacao" no WhatsApp e vê a linha aparecer na planilha.</div>
+      <div class="pergunta">Mandar gastos variados e conferir as respostas ricas</div>
+      <div class="porque">Manda "cafe 8 em alimentacao", "uber 25 em transporte", etc. Confere se volta a confirmacao + contexto da categoria + resumo do mes.</div>
     </div>
 
     <div class="card">
-      <div class="pergunta">Destravar o controle de versão (git)</div>
-      <div class="porque">A tranca continua emperrada desde a faxina. Pra salvar esse marco novo com a planilha Espelho embarcada, preciso da sua autorização pra destravar. Sem isso, o código fica só na máquina — não sobe pro ar.</div>
+      <div class="pergunta">Experimentar os 15 tipos de consulta</div>
+      <div class="porque">Testa "quanto gastei esse mes", "qual meu saldo", "qual meu maior gasto", "to no vermelho?" e os outros. Veja se as respostas fazem sentido.</div>
+    </div>
+
+    <div class="card">
+      <div class="pergunta">Mandar um audio de voz</div>
+      <div class="porque">Grava um audio no WhatsApp tipo "gastei vinte reais no almoco". O bot transcreve e anota. Precisa da OPENAI_API_KEY no Vercel pra funcionar.</div>
+    </div>
+
+    <div class="card">
+      <div class="pergunta">Esperar a mensagem matinal amanha as 8h</div>
+      <div class="porque">Amanha de manha voce deve receber o resumo diario automatico. Se nao chegar, a gente investiga o cron.</div>
+    </div>
+
+    <div class="card">
+      <div class="pergunta">Esperar o fechamento semanal no domingo 20h</div>
+      <div class="porque">No proximo domingo a noite, chega o resumo da semana automaticamente.</div>
+    </div>
+  </section>
+
+  <section>
+    <div class="label">Lembretes importantes</div>
+
+    <div class="alerta">
+      <strong>OPENAI_API_KEY:</strong> Configure no Vercel pra audio funcionar. Sem ela, mensagens de voz nao sao transcritas.
+    </div>
+    <div class="alerta">
+      <strong>Planilha Google:</strong> Mude o acesso de volta pra "Restrito" agora que o setup ta feito.
+    </div>
+    <div class="alerta">
+      <strong>Google Cloud Free Trial:</strong> R$ 1.785,67 de credito restante, ~75 dias ate expirar. Resgate antes que acabe.
+    </div>
+  </section>
+
+  <section>
+    <div class="label">Saude por modulo</div>
+
+    <div class="card" style="padding: 22px 24px;">
+      <div class="barra-container">
+        <div class="barra-label"><span>Bot WhatsApp / Conversacao</span><span>95%</span></div>
+        <div class="barra"><div class="barra-fill green" style="width:95%"></div></div>
+      </div>
+      <div class="barra-container">
+        <div class="barra-label"><span>Relatorios e Insights</span><span>100%</span></div>
+        <div class="barra"><div class="barra-fill green" style="width:100%"></div></div>
+      </div>
+      <div class="barra-container">
+        <div class="barra-label"><span>Dashboard Web</span><span>92%</span></div>
+        <div class="barra"><div class="barra-fill green" style="width:92%"></div></div>
+      </div>
+      <div class="barra-container">
+        <div class="barra-label"><span>Infraestrutura / Deploy</span><span>92%</span></div>
+        <div class="barra"><div class="barra-fill green" style="width:92%"></div></div>
+      </div>
+      <div class="barra-container">
+        <div class="barra-label"><span>Categorizacao Inteligente</span><span>85%</span></div>
+        <div class="barra"><div class="barra-fill green" style="width:85%"></div></div>
+      </div>
+      <div class="barra-container">
+        <div class="barra-label"><span>Banco de Dados / Persistencia</span><span>82%</span></div>
+        <div class="barra"><div class="barra-fill green" style="width:82%"></div></div>
+      </div>
+      <div class="barra-container">
+        <div class="barra-label"><span>Acesso Mobile (PWA)</span><span>73%</span></div>
+        <div class="barra"><div class="barra-fill yellow" style="width:73%"></div></div>
+      </div>
+      <div class="barra-container">
+        <div class="barra-label"><span>Multi-usuario (preparacao)</span><span>15%</span></div>
+        <div class="barra"><div class="barra-fill accent" style="width:15%"></div></div>
+      </div>
+      <div class="barra-container">
+        <div class="barra-label"><span>Identidade Visual / Branding</span><span>0%</span></div>
+        <div class="barra"><div class="barra-fill muted" style="width:0%"></div></div>
+      </div>
+      <div class="barra-container">
+        <div class="barra-label"><span>Integracao WhatsApp Oficial</span><span>0%</span></div>
+        <div class="barra"><div class="barra-fill muted" style="width:0%"></div></div>
+      </div>
     </div>
   </section>
 
   <section>
     <div class="label">O que vem a seguir</div>
     <ol class="proximos">
-      <li>Você faz o setup da planilha seguindo docs/SETUP_SHEETS.md.</li>
-      <li>Testa com um gasto real no WhatsApp e vê aparecer na planilha.</li>
-      <li>Me autoriza a destravar o git pra salvar esse marco com o nome "v9 — planilha Espelho".</li>
-      <li>A gente começa o próximo cômodo: migração pro WhatsApp oficial (Meta), saindo do sandbox de teste.</li>
-      <li>Depois da Meta, entra áudio. Depois, modo fácil pros pais.</li>
+      <li>Voce testa as respostas ricas, as 15 consultas e o audio.</li>
+      <li>Confere a mensagem matinal amanha as 8h e o fechamento semanal no domingo.</li>
+      <li>Configura OPENAI_API_KEY no Vercel e muda planilha pra "Restrito".</li>
+      <li>Migracao pro WhatsApp oficial (Meta API) — sair do sandbox, ter numero proprio.</li>
+      <li>Escaneamento de fotos e recibos.</li>
+      <li>Lembretes de contas e despesas recorrentes.</li>
+      <li>Onboarding multi-usuario.</li>
+      <li>Identidade visual e branding.</li>
     </ol>
   </section>
 
   <section>
-    <div class="label">Próximas grandes rodadas</div>
+    <div class="label">Proximas grandes rodadas</div>
 
     <div class="rodada">
       <div class="emoji">📱</div>
       <div>
-        <div class="nome">Migração pro WhatsApp oficial (Meta)</div>
-        <div class="desc">Sair do sandbox do Twilio e ligar no WhatsApp Business API de verdade. Próximo cômodo depois da planilha.</div>
+        <div class="nome">Migracao pro WhatsApp oficial (Meta)</div>
+        <div class="desc">Sair do sandbox e ligar no WhatsApp Business API de verdade. Numero proprio, sem prefixo de teste. Proxima prioridade.</div>
       </div>
     </div>
 
     <div class="rodada">
-      <div class="emoji">🎤</div>
+      <div class="emoji">📸</div>
       <div>
-        <div class="nome">Áudio no WhatsApp</div>
-        <div class="desc">Falar a despesa em vez de digitar. Rodada curta, vem depois da Meta.</div>
-      </div>
-    </div>
-
-    <div class="rodada">
-      <div class="emoji">👵</div>
-      <div>
-        <div class="nome">Modo fácil pros pais</div>
-        <div class="desc">Linguagem acolhedora, botão grande, zero jargão. Quem nunca usou app entende.</div>
-      </div>
-    </div>
-
-    <div class="rodada">
-      <div class="emoji">💳</div>
-      <div>
-        <div class="nome">Cartões de crédito</div>
-        <div class="desc">Ensinar o Caixinha que crédito é dívida pro mês que vem. Voltou pra fila.</div>
-      </div>
-    </div>
-
-    <div class="rodada">
-      <div class="emoji">📦</div>
-      <div>
-        <div class="nome">Parcelamento</div>
-        <div class="desc">Dividir compra em x vezes e mostrar o que vai cair em cada mês. Depois de cartão.</div>
-      </div>
-    </div>
-
-    <div class="rodada">
-      <div class="emoji">📄</div>
-      <div>
-        <div class="nome">PDF mensal</div>
-        <div class="desc">Relatório bonito no fim do mês, tipo fatura de banco, pronto pra guardar.</div>
+        <div class="nome">Escaneamento de fotos e recibos</div>
+        <div class="desc">Mandar foto de nota fiscal ou cupom e o bot extrai valor, data e categoria automaticamente.</div>
       </div>
     </div>
 
     <div class="rodada">
       <div class="emoji">⏰</div>
       <div>
-        <div class="nome">Lembretes</div>
-        <div class="desc">Caixinha avisa conta a vencer, fatura fechando, meta perto do limite.</div>
+        <div class="nome">Lembretes e despesas recorrentes</div>
+        <div class="desc">Caixinha avisa conta a vencer, registra gastos fixos todo mes, alerta fatura fechando.</div>
+      </div>
+    </div>
+
+    <div class="rodada">
+      <div class="emoji">👥</div>
+      <div>
+        <div class="nome">Multi-usuario e onboarding</div>
+        <div class="desc">Cada pessoa com seu perfil, tom de voz preferido, categorias proprias. O tom duplo (cria/neutro) ja ta pronto pra isso.</div>
       </div>
     </div>
 
@@ -309,13 +422,37 @@
         <div class="desc">Logo, cor, tipografia, personalidade. Dar cara ao Caixinha.</div>
       </div>
     </div>
+
+    <div class="rodada">
+      <div class="emoji">💳</div>
+      <div>
+        <div class="nome">Cartoes de credito</div>
+        <div class="desc">Ensinar o Caixinha que credito e divida pro mes que vem.</div>
+      </div>
+    </div>
+
+    <div class="rodada">
+      <div class="emoji">📦</div>
+      <div>
+        <div class="nome">Parcelamento</div>
+        <div class="desc">Dividir compra em x vezes e mostrar o que vai cair em cada mes.</div>
+      </div>
+    </div>
+
+    <div class="rodada">
+      <div class="emoji">📄</div>
+      <div>
+        <div class="nome">PDF mensal</div>
+        <div class="desc">Relatorio bonito no fim do mes, tipo fatura de banco, pronto pra guardar.</div>
+      </div>
+    </div>
   </section>
 
   <section>
-    <div class="label">Saúde geral</div>
+    <div class="label">Saude geral</div>
     <div class="saude">
-      <div class="pct">54%</div>
-      <div class="frase">Subiu 7 pontos. A base tá firme, typecheck zerado, e o primeiro cômodo novo (planilha Espelho) tá erguido e testado. A próxima subida vem quando você fizer o setup e a planilha começar a receber linhas de verdade.</div>
+      <div class="pct">67%</div>
+      <div class="frase">Subiu 6 pontos (era 61%). O bot agora e um assistente de verdade: respostas ricas, 15 consultas naturais, audio, resumos automaticos, tom duplo, planilha sincronizando. A proxima subida grande vem com a migracao pra Meta API e o onboarding multi-usuario.</div>
     </div>
   </section>
 

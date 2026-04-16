@@ -73,8 +73,10 @@ export interface ParsedCorrection {
 }
 
 export interface QueryResult {
-  type: 'summary' | 'week' | 'today' | 'yesterday' | 'balance' | 'category';
+  type: 'summary' | 'week' | 'today' | 'yesterday' | 'balance' | 'category' | 'biggest' | 'last_n' | 'compare' | 'daily_avg' | 'remaining' | 'status';
   term?: string;
+  term2?: string; // for compare queries
+  count?: number; // for last_n
 }
 
 export interface CategoryCommand {

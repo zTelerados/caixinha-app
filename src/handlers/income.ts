@@ -1,5 +1,6 @@
 import { supabaseAdmin } from '@/lib/supabase';
-import { fmtValor } from '@/lib/formatter';
+import { monthLabel } from '@/lib/formatter';
+import { buildIncomeResponse } from '@/lib/responses';
 import { ParsedIncome, Transaction } from '@/types';
 import { v4 as uuidv4 } from 'uuid';
 import { syncTransactionInBackground } from '@/lib/sheets-sync';
@@ -60,5 +61,48 @@ export async function handleIncome(
     },
   ]);
 
-  return `Entrada registrada. ${parsed.source}, ${fmtValor(parsed.amount)}.`;
+  // Fetch user name and tone
+  const { data: user } = await supabaseAdmin
+    .from('users')
+    .select('name, tone')
+    .eq('id', userId)
+    .single();
+
+  const userName = user?.name ?? 'Usuário';
+  const tone = user?.tone ?? 'cria';
+
+  // Query month totals for balance
+  const currentMonthLabel = monthLabel(now);
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+
+  const [expenseResult, incomeResult] = await Promise.all([
+    supabaseAdmin
+      .from('transactions')
+      .select('amount')
+      .eq('user_id', userId)
+      .eq('type', 'expense')
+      .eq('month_label', currentMonthLabel)
+      .gte('date', monthStart.toISOString()),
+    supabaseAdmin
+      .from('transactions')
+      .select('amount')
+      .eq('user_id', userId)
+      .eq('type', 'income')
+      .eq('month_label', currentMonthLabel)
+      .gte('date', monthStart.toISOString()),
+  ]);
+
+  const monthExpense = (expenseResult.data || []).reduce((sum, tx) => sum + tx.amount, 0);
+  const monthIncome = (incomeResult.data || []).reduce((sum, tx) => sum + tx.amount, 0);
+  const balance = monthIncome - monthExpense;
+
+  return buildIncomeResponse({
+    userName,
+    source: parsed.source,
+    amount: parsed.amount,
+    tone,
+    monthIncome,
+    monthExpense,
+    balance,
+  });
 }

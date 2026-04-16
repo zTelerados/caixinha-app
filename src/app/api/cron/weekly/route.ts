@@ -1,122 +1,94 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { sendWhatsApp } from '@/lib/twilio';
-import { monthLabel, fmtValor, fmtDate } from '@/lib/formatter';
-import { buildWeeklyNarrative, WeeklyStats } from '@/lib/narrative';
+import { fmtDate } from '@/lib/formatter';
+import { buildWeeklySummaryMessage } from '@/lib/responses';
 import { User } from '@/types';
 
 export const dynamic = 'force-dynamic';
 
-async function verifyAuth(req: NextRequest): Promise<boolean> {
-  // Verify Vercel's built-in cron auth header
-  const authHeader = req.headers.get('authorization');
-  if (authHeader === `Bearer ${process.env.CRON_SECRET}`) {
-    return true;
-  }
-  return false;
-}
-
 async function sendWeeklyReport(user: User): Promise<void> {
   const now = new Date();
 
-  // Get last 7 days transactions
-  const weekStart = new Date(now.getTime() - 7 * 86400000);
+  // This week: Monday to Sunday
+  // now is Sunday night (cron runs Sunday 23:00 UTC)
+  const dayOfWeek = now.getDay(); // 0 = Sunday
+  const mondayOffset = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+  const weekStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - mondayOffset);
+  const weekEnd = new Date(weekStart.getTime() + 7 * 86400000);
+
+  // Last week boundaries
+  const lastWeekStart = new Date(weekStart.getTime() - 7 * 86400000);
+
+  // This week's expenses
   const { data: weekTxs } = await supabaseAdmin
     .from('transactions')
-    .select('*')
+    .select('description, amount, date')
     .eq('user_id', user.id)
     .eq('type', 'expense')
     .gte('date', weekStart.toISOString())
+    .lt('date', weekEnd.toISOString())
     .order('amount', { ascending: false });
 
-  // Get 7 days before that (14-7 days ago)
-  const prevWeekStart = new Date(now.getTime() - 14 * 86400000);
-  const { data: prevWeekTxs } = await supabaseAdmin
+  // Last week's expenses
+  const { data: lastWeekTxs } = await supabaseAdmin
     .from('transactions')
     .select('amount')
     .eq('user_id', user.id)
     .eq('type', 'expense')
-    .gte('date', prevWeekStart.toISOString())
+    .gte('date', lastWeekStart.toISOString())
     .lt('date', weekStart.toISOString());
 
-  const totalThisWeek = (weekTxs || []).reduce((sum, tx) => sum + tx.amount, 0);
-  const totalLastWeek = (prevWeekTxs || []).reduce((sum, tx) => sum + tx.amount, 0);
+  const txs = weekTxs || [];
+  const weekTotal = txs.reduce((sum, tx) => sum + tx.amount, 0);
+  const lastWeekTotal = (lastWeekTxs || []).reduce((sum, tx) => sum + tx.amount, 0);
+  const weekPctChange = lastWeekTotal > 0
+    ? ((weekTotal - lastWeekTotal) / lastWeekTotal) * 100
+    : 0;
 
-  // Group by category
-  const categoryMap = new Map<string, { name: string; emoji: string; total: number; count: number }>();
-  for (const tx of weekTxs || []) {
-    if (tx.category_id) {
-      if (!categoryMap.has(tx.category_id)) {
-        // Fetch category
-        const { data: cat } = await supabaseAdmin
-          .from('categories')
-          .select('name, emoji')
-          .eq('id', tx.category_id)
-          .single();
+  // Top 3 items by amount (already sorted desc)
+  const topItems = txs.slice(0, 3).map((tx) => ({
+    description: tx.description,
+    amount: tx.amount,
+  }));
 
-        if (cat) {
-          categoryMap.set(tx.category_id, {
-            name: cat.name,
-            emoji: cat.emoji,
-            total: 0,
-            count: 0,
-          });
-        }
-      }
-      const entry = categoryMap.get(tx.category_id);
-      if (entry) {
-        entry.total += tx.amount;
-        entry.count += 1;
-      }
-    }
-  }
+  // Biggest single expense
+  const biggestSingle = txs.length > 0
+    ? { description: txs[0].description, amount: txs[0].amount }
+    : null;
 
-  const topCategories = Array.from(categoryMap.values())
-    .sort((a, b) => b.total - a.total);
-
-  // Find most expensive
-  const mostExpensive = (weekTxs || []).sort((a, b) => b.amount - a.amount)[0] || {
-    description: 'N/A',
-    amount: 0,
-    date: '',
-  };
-
-  // Find highest spending day
+  // Most expensive day
   const dayMap = new Map<string, number>();
-  for (const tx of weekTxs || []) {
-    const date = tx.date ? fmtDate(new Date(tx.date)) : 'N/A';
-    dayMap.set(date, (dayMap.get(date) || 0) + tx.amount);
+  for (const tx of txs) {
+    const day = tx.date ? fmtDate(new Date(tx.date)) : 'N/A';
+    dayMap.set(day, (dayMap.get(day) || 0) + tx.amount);
   }
-  const highestDay = Array.from(dayMap.entries())
-    .sort((a, b) => b[1] - a[1])[0] || ['N/A', 0];
+  const sortedDays = Array.from(dayMap.entries()).sort((a, b) => b[1] - a[1]);
+  const mostExpensiveDay = sortedDays.length > 0
+    ? { day: sortedDays[0][0], total: sortedDays[0][1] }
+    : null;
 
-  const stats: WeeklyStats = {
-    totalThisWeek,
-    totalLastWeek,
-    topCategories,
-    mostExpensive: {
-      description: mostExpensive.description,
-      amount: mostExpensive.amount,
-      date: mostExpensive.date ? fmtDate(new Date(mostExpensive.date)) : 'N/A',
-    },
-    highestDay: {
-      date: highestDay[0],
-      total: highestDay[1],
-    },
-  };
+  const message = buildWeeklySummaryMessage({
+    userName: user.name,
+    weekTotal,
+    lastWeekTotal,
+    weekPctChange,
+    topItems,
+    biggestSingle,
+    mostExpensiveDay,
+    tone: user.tone,
+  });
 
-  const message = buildWeeklyNarrative(stats);
   await sendWhatsApp(user.phone, message);
 }
 
-export async function GET(req: NextRequest) {
-  // Verify auth
-  if (!verifyAuth(req)) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+export async function GET(request: NextRequest) {
+  const authHeader = request.headers.get('authorization');
+  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+    return new Response('Unauthorized', { status: 401 });
   }
 
   try {
-    // Get all users
     const { data: users } = await supabaseAdmin
       .from('users')
       .select('*');

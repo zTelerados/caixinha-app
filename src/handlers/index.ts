@@ -19,7 +19,17 @@ import { handlePending } from './pending';
 import { handleExpense } from './expense';
 import { v4 as uuidv4 } from 'uuid';
 
-export async function routeMessage(phone: string, message: string): Promise<void> {
+export async function routeMessage(
+  phone: string,
+  message: string,
+  audioTranscription?: string,
+): Promise<void> {
+  // Helper: wraps response with audio prefix when transcription is present
+  const send = async (msg: string) => {
+    const finalMsg = audioTranscription ? wrapAudioResponse(msg, audioTranscription) : msg;
+    await sendWhatsApp(phone, finalMsg);
+  };
+
   try {
     // Find user by phone
     const { data: user } = await supabaseAdmin
@@ -53,7 +63,7 @@ export async function routeMessage(phone: string, message: string): Promise<void
     if (detectUndo(message)) {
       await supabaseAdmin.from('pending_actions').delete().eq('user_id', user.id);
       const response = await handleUndo(user.id, phone);
-      await sendWhatsApp(phone, response);
+      await send(response);
       return;
     }
 
@@ -62,7 +72,7 @@ export async function routeMessage(phone: string, message: string): Promise<void
     if (correction) {
       await supabaseAdmin.from('pending_actions').delete().eq('user_id', user.id);
       const response = await handleCorrection(user.id, phone, correction);
-      await sendWhatsApp(phone, response);
+      await send(response);
       return;
     }
 
@@ -71,7 +81,7 @@ export async function routeMessage(phone: string, message: string): Promise<void
     if (income) {
       await supabaseAdmin.from('pending_actions').delete().eq('user_id', user.id);
       const response = await handleIncome(user.id, income, phone);
-      await sendWhatsApp(phone, response);
+      await send(response);
       return;
     }
 
@@ -80,7 +90,7 @@ export async function routeMessage(phone: string, message: string): Promise<void
     if (query) {
       await supabaseAdmin.from('pending_actions').delete().eq('user_id', user.id);
       const response = await handleQuery(user.id, query);
-      await sendWhatsApp(phone, response);
+      await send(response);
       return;
     }
 
@@ -89,7 +99,7 @@ export async function routeMessage(phone: string, message: string): Promise<void
     if (categoryCmd) {
       await supabaseAdmin.from('pending_actions').delete().eq('user_id', user.id);
       const response = await handleCategoryCommand(user.id, phone, categoryCmd);
-      await sendWhatsApp(phone, response);
+      await send(response);
       return;
     }
 
@@ -103,7 +113,7 @@ export async function routeMessage(phone: string, message: string): Promise<void
 
     if (pending && pending.length > 0) {
       const response = await handlePending(user.id, phone, message, pending[0]);
-      await sendWhatsApp(phone, response);
+      await send(response);
       return;
     }
 
@@ -141,7 +151,7 @@ export async function routeMessage(phone: string, message: string): Promise<void
             response = `${parsed.description} de ${parsed.amount}. Em qual categoria? (alimentação, transporte, lazer...)`;
           }
 
-          await sendWhatsApp(phone, response);
+          await send(response);
           return;
         }
       }
@@ -159,22 +169,30 @@ export async function routeMessage(phone: string, message: string): Promise<void
         await supabaseAdmin.from('pending_actions').insert([newPending]);
 
         response = 'Crédito, pix ou dinheiro?';
-        await sendWhatsApp(phone, response);
+        await send(response);
         return;
       }
 
       // Complete the expense
       response = await handleExpense(user.id, parsed, phone);
-      await sendWhatsApp(phone, response);
+      await send(response);
       return;
     }
 
     // Nothing matched
     const fallback =
       'Não entendi. Tenta algo tipo: uber 23 pix, açaí 17, recebi 500 da mãe, resumo, categorias.';
-    await sendWhatsApp(phone, fallback);
+    await send(fallback);
   } catch (e) {
     console.error('Route message error:', e);
     await sendWhatsApp(phone, 'Erro ao processar. Tenta de novo.');
   }
+}
+
+/**
+ * Wraps a response with the audio transcription prefix when the message
+ * originated from a voice note.
+ */
+function wrapAudioResponse(response: string, transcription: string): string {
+  return `🎤 Ouvi: "${transcription}"\n\n${response}\n\nSe eu entendi errado, me corrige.`;
 }

@@ -74,21 +74,66 @@ export function detectIncome(msg: string): ParsedIncome | null {
 export function detectQuery(msg: string): QueryResult | null {
   const t = normalize(msg);
 
-  if (/^(resumo|como\s+t[ao]|quanto\s+gast(ei|o)(\s|$|\?)|quanto\s+ja\s+gast|me\s+da\s+(um\s+)?resumo)/.test(t))
+  // ── Compare: "gastei mais com comida ou transporte?" ──
+  const compareMatch = t.match(/gast(ei|o|ou)\s+mais\s+(com|em|de)\s+(.+?)\s+ou\s+(.+?)(\?|$)/);
+  if (compareMatch) {
+    return { type: 'compare', term: compareMatch[3].trim(), term2: compareMatch[4].trim() };
+  }
+
+  // ── Last N: "me mostra os últimos 5 gastos" ──
+  const lastNMatch = t.match(/(ultimos?|mostra|lista)\s+(\d+)\s*(gasto|transac|despesa|compra)/);
+  if (lastNMatch) {
+    return { type: 'last_n', count: parseInt(lastNMatch[2], 10) };
+  }
+
+  // ── Biggest: "qual meu maior gasto do mês" ──
+  if (/maior\s+gasto/.test(t) || /gasto\s+mais\s+caro/.test(t) || /gast(ei|o|ou)\s+mais/.test(t) && !/ou\s+/.test(t)) {
+    return { type: 'biggest' };
+  }
+
+  // ── Daily avg: "qual meu gasto médio por dia" ──
+  if (/gasto\s+medio/.test(t) || /media\s+(por\s+)?dia/.test(t) || /medio\s+(por\s+)?dia/.test(t)) {
+    return { type: 'daily_avg' };
+  }
+
+  // ── Status: "tô no vermelho?" / "como tô no mês?" ──
+  if (/t[oa]\s+no\s+vermelho/.test(t) || /como\s+t[oa]\s+no\s+mes/.test(t) || /como\s+estou\s+no\s+mes/.test(t) || /situacao\s+do\s+mes/.test(t)) {
+    return { type: 'status' };
+  }
+
+  // ── Remaining: "quanto sobra pro resto do mês" ──
+  if (/sobra\s+(pro|para\s+o)\s+resto/.test(t) || /quanto\s+sobra/.test(t) || /resta\s+do\s+mes/.test(t)) {
+    return { type: 'remaining' };
+  }
+
+  // ── Summary ──
+  if (/^(resumo|quanto\s+gast(ei|o)(\s|$|\?)|quanto\s+ja\s+gast|me\s+da\s+(um\s+)?resumo)/.test(t))
     return { type: 'summary' };
   if (/quanto\s+(eu\s+)?gast(ei|o|ou)\s+(esse|este|no|nesse|neste)\s*(mes)/.test(t))
     return { type: 'summary' };
+  if (/como\s+t[ao]\s+no\s+mes/.test(t))
+    return { type: 'status' };
+  if (/^como\s+t[ao]/.test(t))
+    return { type: 'summary' };
+
+  // ── Period queries ──
   if (/quanto\s+(eu\s+)?gast(ei|o|ou)\s+(essa|esta|na|nessa|nesta)\s*semana/.test(t))
     return { type: 'week' };
   if (/quanto\s+(eu\s+)?gast(ei|o|ou)\s+hoje/.test(t))
     return { type: 'today' };
-  if (/quanto\s+(eu\s+)?gast(ei|o|ou)\s+ontem/.test(t))
+  if (/quanto\s+(eu\s+)?gast(ei|o|ou)\s+ontem/.test(t) || /gastos\s+de\s+ontem/.test(t) || /quais\s+(foram\s+)?(os\s+)?(meus\s+)?gastos\s+(de\s+)?ontem/.test(t))
     return { type: 'yesterday' };
-  if (/saldo|sobr(ou|a)|quanto\s+(eu\s+)?tenho|quanto\s+falta|quanto\s+resta/.test(t))
+
+  // ── Balance ──
+  if (/saldo|quanto\s+(eu\s+)?tenho|quanto\s+falta|quanto\s+resta/.test(t))
+    return { type: 'balance' };
+  if (/sobr(ou|a)/.test(t))
     return { type: 'balance' };
 
+  // ── Category queries ──
   const catPatterns = [
     /quanto\s+(eu\s+)?gast(ei|o|ou)\s*(com|em|de|no|na)\s+(.+)/,
+    /quantos?\s+(.+?)\s+(essa|esta|na|nessa)\s*semana/,
     /total\s*(de|do|da|dos|das|em|com|no|na)\s+(.+)/,
     /quanto\s+foi\s*(de|do|da|em|com|no|na)\s+(.+)/,
     /quanto\s+t[ao]\s*(de|do|da|em|com|no|na)\s+(.+)/,
