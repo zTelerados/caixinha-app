@@ -1,0 +1,1129 @@
+From 486c63a1ce0fe025599f9e58de2c0a5e820e664e Mon Sep 17 00:00:00 2001
+From: Thiago Ribeiro <tmr.flu123123@hotmail.com>
+Date: Thu, 16 Apr 2026 19:38:21 +0000
+Subject: [PATCH] feat: debug logging system + fix Date serialization + dedup
+ webhook
+
+- Added debug_logs table SQL migration
+- Added /debug page for real-time log viewing
+- Added debug-log.ts with createDebugContext pattern
+- Fixed Date deserialization in pending.ts (hydrateParsed)
+- Added message deduplication in webhook (3s window)
+- Fixed anomaly.ts false positives (min 5 txns, 2.5x threshold)
+- Full debug instrumentation in handlers/index.ts
+- Added regression test checklist
+---
+ DIAGNOSTICO_CAIXINHA.md      |   2 +-
+ diagnostic-history.json      |  18 +++
+ diagnostico.html             |  45 ++++----
+ package-lock.json            |  12 --
+ sql/create_debug_logs.sql    |  35 ++++++
+ src/app/api/debug/route.ts   |  20 ++++
+ src/app/api/webhook/route.ts |  53 ++++++---
+ src/app/debug/page.tsx       | 213 +++++++++++++++++++++++++++++++++++
+ src/handlers/index.ts        | Bin 6392 -> 8237 bytes
+ src/handlers/pending.ts      | 116 ++++++++++---------
+ src/lib/anomaly.ts           |  40 ++++---
+ src/lib/debug-log.ts         |  66 +++++++++++
+ tests/regression.md          |  85 ++++++++++++++
+ 13 files changed, 580 insertions(+), 125 deletions(-)
+ create mode 100755 sql/create_debug_logs.sql
+ create mode 100755 src/app/api/debug/route.ts
+ create mode 100755 src/app/debug/page.tsx
+ create mode 100755 src/lib/debug-log.ts
+ create mode 100755 tests/regression.md
+
+diff --git a/DIAGNOSTICO_CAIXINHA.md b/DIAGNOSTICO_CAIXINHA.md
+index 43d14b9..2a576ae 100644
+--- a/DIAGNOSTICO_CAIXINHA.md
++++ b/DIAGNOSTICO_CAIXINHA.md
+@@ -76,6 +76,7 @@ Esses modulos permanecem em 0% ou baixo percentual de forma proposital. Quando c
+ 
+ ## Historico de Versoes
+ 
++- **d765e8b** — progresso geral 61% (16 de abril de 2026)
+ - **93deafd** — progresso geral 61% (16 de abril de 2026)
+ - **4f5528c** — progresso geral 61% (16 de abril de 2026)
+ - **391bb76** — progresso geral 61% (16 de abril de 2026)
+@@ -85,4 +86,3 @@ Esses modulos permanecem em 0% ou baixo percentual de forma proposital. Quando c
+ - **cc31161** — progresso geral 61% (16 de abril de 2026)
+ - **42c2e9b** — progresso geral 61% (15 de abril de 2026)
+ - **45dff43** — progresso geral 61% (12 de abril de 2026)
+-- **45dff43** — progresso geral 61% (12 de abril de 2026)
+diff --git a/diagnostic-history.json b/diagnostic-history.json
+index 5d1fe69..4db511e 100644
+--- a/diagnostic-history.json
++++ b/diagnostic-history.json
+@@ -322,5 +322,23 @@
+       "Multi-usuario (preparacao)": 0,
+       "Integracao WhatsApp Oficial": 0
+     }
++  },
++  {
++    "date": "16 de abril de 2026",
++    "timestamp": "2026-04-16T19:38:21.809Z",
++    "overall": 61,
++    "commit": "6bb1ed2",
++    "modules": {
++      "Bot WhatsApp / Conversacao": 87,
++      "Categorizacao Inteligente": 85,
++      "Banco de Dados / Persistencia": 82,
++      "Dashboard Web": 92,
++      "Acesso Mobile (PWA)": 73,
++      "Relatorios e Insights": 100,
++      "Identidade Visual / Branding": 0,
++      "Infraestrutura / Deploy": 88,
++      "Multi-usuario (preparacao)": 0,
++      "Integracao WhatsApp Oficial": 0
++    }
+   }
+ ]
+diff --git a/diagnostico.html b/diagnostico.html
+index d445c60..899bf64 100644
+--- a/diagnostico.html
++++ b/diagnostico.html
+@@ -250,31 +250,32 @@
+       <text class="chart-label" x="32" y="64" text-anchor="end">75%</text>
+       <line class="chart-grid" x1="40" y1="40" x2="820" y2="40"/>
+       <text class="chart-label" x="32" y="44" text-anchor="end">100%</text>
+-        <path class="chart-area" d="M 40 68.8 L 88.75 68 L 137.5 68 L 186.25 68 L 235 78.4 L 283.75 78.4 L 332.5 71.2 L 381.25 71.2 L 430 71.2 L 478.75 71.2 L 527.5 71.2 L 576.25 71.2 L 625 71.2 L 673.75 71.2 L 722.5 71.2 L 771.25 71.2 L 820 71.2 L 820 120 L 40 120 Z"/>
+-        <path class="chart-line" d="M 40 68.8 L 88.75 68 L 137.5 68 L 186.25 68 L 235 78.4 L 283.75 78.4 L 332.5 71.2 L 381.25 71.2 L 430 71.2 L 478.75 71.2 L 527.5 71.2 L 576.25 71.2 L 625 71.2 L 673.75 71.2 L 722.5 71.2 L 771.25 71.2 L 820 71.2"/>
++        <path class="chart-area" d="M 40 68.8 L 85.88235294117646 68 L 131.76470588235293 68 L 177.64705882352942 68 L 223.52941176470588 78.4 L 269.4117647058823 78.4 L 315.29411764705884 71.2 L 361.1764705882353 71.2 L 407.05882352941177 71.2 L 452.94117647058823 71.2 L 498.8235294117647 71.2 L 544.7058823529412 71.2 L 590.5882352941177 71.2 L 636.4705882352941 71.2 L 682.3529411764706 71.2 L 728.2352941176471 71.2 L 774.1176470588235 71.2 L 820 71.2 L 820 120 L 40 120 Z"/>
++        <path class="chart-line" d="M 40 68.8 L 85.88235294117646 68 L 131.76470588235293 68 L 177.64705882352942 68 L 223.52941176470588 78.4 L 269.4117647058823 78.4 L 315.29411764705884 71.2 L 361.1764705882353 71.2 L 407.05882352941177 71.2 L 452.94117647058823 71.2 L 498.8235294117647 71.2 L 544.7058823529412 71.2 L 590.5882352941177 71.2 L 636.4705882352941 71.2 L 682.3529411764706 71.2 L 728.2352941176471 71.2 L 774.1176470588235 71.2 L 820 71.2"/>
+         <circle class="chart-dot" cx="40" cy="68.8"><title>12 de: 64%</title></circle>
+-      <circle class="chart-dot" cx="88.75" cy="68"><title>12 de: 65%</title></circle>
+-      <circle class="chart-dot" cx="137.5" cy="68"><title>12 de: 65%</title></circle>
+-      <circle class="chart-dot" cx="186.25" cy="68"><title>12 de: 65%</title></circle>
+-      <circle class="chart-dot" cx="235" cy="78.4"><title>12 de: 52%</title></circle>
+-      <circle class="chart-dot" cx="283.75" cy="78.4"><title>12 de: 52%</title></circle>
+-      <circle class="chart-dot" cx="332.5" cy="71.2"><title>12 de: 61%</title></circle>
+-      <circle class="chart-dot" cx="381.25" cy="71.2"><title>12 de: 61%</title></circle>
+-      <circle class="chart-dot" cx="430" cy="71.2"><title>12 de: 61%</title></circle>
+-      <circle class="chart-dot" cx="478.75" cy="71.2"><title>15 de: 61%</title></circle>
+-      <circle class="chart-dot" cx="527.5" cy="71.2"><title>16 de: 61%</title></circle>
+-      <circle class="chart-dot" cx="576.25" cy="71.2"><title>16 de: 61%</title></circle>
+-      <circle class="chart-dot" cx="625" cy="71.2"><title>16 de: 61%</title></circle>
+-      <circle class="chart-dot" cx="673.75" cy="71.2"><title>16 de: 61%</title></circle>
+-      <circle class="chart-dot" cx="722.5" cy="71.2"><title>16 de: 61%</title></circle>
+-      <circle class="chart-dot" cx="771.25" cy="71.2"><title>16 de: 61%</title></circle>
++      <circle class="chart-dot" cx="85.88235294117646" cy="68"><title>12 de: 65%</title></circle>
++      <circle class="chart-dot" cx="131.76470588235293" cy="68"><title>12 de: 65%</title></circle>
++      <circle class="chart-dot" cx="177.64705882352942" cy="68"><title>12 de: 65%</title></circle>
++      <circle class="chart-dot" cx="223.52941176470588" cy="78.4"><title>12 de: 52%</title></circle>
++      <circle class="chart-dot" cx="269.4117647058823" cy="78.4"><title>12 de: 52%</title></circle>
++      <circle class="chart-dot" cx="315.29411764705884" cy="71.2"><title>12 de: 61%</title></circle>
++      <circle class="chart-dot" cx="361.1764705882353" cy="71.2"><title>12 de: 61%</title></circle>
++      <circle class="chart-dot" cx="407.05882352941177" cy="71.2"><title>12 de: 61%</title></circle>
++      <circle class="chart-dot" cx="452.94117647058823" cy="71.2"><title>15 de: 61%</title></circle>
++      <circle class="chart-dot" cx="498.8235294117647" cy="71.2"><title>16 de: 61%</title></circle>
++      <circle class="chart-dot" cx="544.7058823529412" cy="71.2"><title>16 de: 61%</title></circle>
++      <circle class="chart-dot" cx="590.5882352941177" cy="71.2"><title>16 de: 61%</title></circle>
++      <circle class="chart-dot" cx="636.4705882352941" cy="71.2"><title>16 de: 61%</title></circle>
++      <circle class="chart-dot" cx="682.3529411764706" cy="71.2"><title>16 de: 61%</title></circle>
++      <circle class="chart-dot" cx="728.2352941176471" cy="71.2"><title>16 de: 61%</title></circle>
++      <circle class="chart-dot" cx="774.1176470588235" cy="71.2"><title>16 de: 61%</title></circle>
+       <circle class="chart-dot" cx="820" cy="71.2"><title>16 de: 61%</title></circle>
+         <text class="chart-label" x="40" y="138" text-anchor="middle">12 de</text>
+-      <text class="chart-label" x="186.25" y="138" text-anchor="middle">12 de</text>
+-      <text class="chart-label" x="332.5" y="138" text-anchor="middle">12 de</text>
+-      <text class="chart-label" x="478.75" y="138" text-anchor="middle">15 de</text>
+-      <text class="chart-label" x="625" y="138" text-anchor="middle">16 de</text>
+-      <text class="chart-label" x="771.25" y="138" text-anchor="middle">16 de</text>
++      <text class="chart-label" x="177.64705882352942" y="138" text-anchor="middle">12 de</text>
++      <text class="chart-label" x="315.29411764705884" y="138" text-anchor="middle">12 de</text>
++      <text class="chart-label" x="452.94117647058823" y="138" text-anchor="middle">15 de</text>
++      <text class="chart-label" x="590.5882352941177" y="138" text-anchor="middle">16 de</text>
++      <text class="chart-label" x="728.2352941176471" y="138" text-anchor="middle">16 de</text>
+       <text class="chart-label" x="820" y="138" text-anchor="middle">16 de</text>
+       </svg>
+     </div>
+diff --git a/package-lock.json b/package-lock.json
+index ef4fc75..e664dcf 100644
+--- a/package-lock.json
++++ b/package-lock.json
+@@ -579,9 +579,6 @@
+       "cpu": [
+         "arm64"
+       ],
+-      "libc": [
+-        "glibc"
+-      ],
+       "license": "MIT",
+       "optional": true,
+       "os": [
+@@ -598,9 +595,6 @@
+       "cpu": [
+         "arm64"
+       ],
+-      "libc": [
+-        "musl"
+-      ],
+       "license": "MIT",
+       "optional": true,
+       "os": [
+@@ -617,9 +611,6 @@
+       "cpu": [
+         "x64"
+       ],
+-      "libc": [
+-        "glibc"
+-      ],
+       "license": "MIT",
+       "optional": true,
+       "os": [
+@@ -636,9 +627,6 @@
+       "cpu": [
+         "x64"
+       ],
+-      "libc": [
+-        "musl"
+-      ],
+       "license": "MIT",
+       "optional": true,
+       "os": [
+diff --git a/sql/create_debug_logs.sql b/sql/create_debug_logs.sql
+new file mode 100755
+index 0000000..183df3c
+--- /dev/null
++++ b/sql/create_debug_logs.sql
+@@ -0,0 +1,35 @@
++-- Caixinha: Create debug_logs table
++-- Run this in Supabase SQL Editor (https://supabase.com/dashboard → SQL Editor)
++
++CREATE TABLE IF NOT EXISTS debug_logs (
++  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
++  user_id UUID REFERENCES users(id),
++  timestamp TIMESTAMPTZ DEFAULT now(),
++  incoming_message TEXT NOT NULL,
++  detected_intent TEXT NOT NULL DEFAULT 'unknown',
++  pending_action_found TEXT,
++  handler_used TEXT NOT NULL DEFAULT 'none',
++  parsed_data JSONB,
++  response_sent TEXT NOT NULL DEFAULT '',
++  error TEXT,
++  processing_time_ms INTEGER DEFAULT 0
++);
++
++-- Index for fast lookups by timestamp (most common query)
++CREATE INDEX IF NOT EXISTS idx_debug_logs_timestamp ON debug_logs(timestamp DESC);
++
++-- Index for filtering by user
++CREATE INDEX IF NOT EXISTS idx_debug_logs_user ON debug_logs(user_id);
++
++-- Auto-cleanup: keep only last 7 days of logs
++-- (optional, run manually or set up a cron)
++-- DELETE FROM debug_logs WHERE timestamp < now() - interval '7 days';
++
++-- Grant access to service role (should already have it, but just in case)
++ALTER TABLE debug_logs ENABLE ROW LEVEL SECURITY;
++
++-- Policy: service role can do everything
++CREATE POLICY "Service role full access" ON debug_logs
++  FOR ALL
++  USING (true)
++  WITH CHECK (true);
+diff --git a/src/app/api/debug/route.ts b/src/app/api/debug/route.ts
+new file mode 100755
+index 0000000..5b1c303
+--- /dev/null
++++ b/src/app/api/debug/route.ts
+@@ -0,0 +1,20 @@
++import { NextResponse } from 'next/server';
++import { supabaseAdmin } from '@/lib/supabase';
++
++export async function GET() {
++  try {
++    const { data, error } = await supabaseAdmin
++      .from('debug_logs')
++      .select('*')
++      .order('timestamp', { ascending: false })
++      .limit(50);
++
++    if (error) {
++      return NextResponse.json({ error: error.message }, { status: 500 });
++    }
++
++    return NextResponse.json({ logs: data || [] });
++  } catch (err) {
++    return NextResponse.json({ error: 'Internal error' }, { status: 500 });
++  }
++}
+diff --git a/src/app/api/webhook/route.ts b/src/app/api/webhook/route.ts
+index e305a63..01e0e29 100644
+--- a/src/app/api/webhook/route.ts
++++ b/src/app/api/webhook/route.ts
+@@ -3,49 +3,66 @@ import { routeMessage } from '@/handlers';
+ import { isAudioMessage, processAudioMessage } from '@/lib/audio';
+ import { sendWhatsApp } from '@/lib/twilio';
+ 
++// Deduplication: ignore identical messages from same number within 3s
++const recentMessages = new Map<string, { body: string; ts: number }>();
++const DEDUP_WINDOW_MS = 3000;
++
++function isDuplicate(phone: string, body: string): boolean {
++  const now = Date.now();
++  const prev = recentMessages.get(phone);
++
++  if (recentMessages.size > 500) {
++    for (const [k, v] of recentMessages) {
++      if (now - v.ts > DEDUP_WINDOW_MS * 2) recentMessages.delete(k);
++    }
++  }
++
++  if (prev && prev.body === body && now - prev.ts < DEDUP_WINDOW_MS) {
++    return true;
++  }
++
++  recentMessages.set(phone, { body, ts: now });
++  return false;
++}
++
++const TWIML_EMPTY = '<?xml version="1.0" encoding="UTF-8"?><Response></Response>';
++const TWIML_HEADERS = { 'Content-Type': 'text/xml' };
++
+ export async function POST(req: NextRequest) {
+   try {
+     const formData = await req.formData();
+     const from = formData.get('From')?.toString() || '';
+ 
+-    if (!from) {
++    if (from === '') {
+       return NextResponse.json({ error: 'Missing params' }, { status: 400 });
+     }
+ 
+     let body = formData.get('Body')?.toString().trim() || '';
+     let audioTranscription: string | undefined;
+ 
+-    // Audio handling — try to transcribe before falling back to text
+     if (isAudioMessage(formData)) {
+       const result = await processAudioMessage(formData);
+       if (result) {
+         body = result.transcription;
+         audioTranscription = result.transcription;
+       } else {
+-        // No OpenAI key or transcription failed
+-        await sendWhatsApp(
+-          from,
+-          'Ainda não consigo ouvir áudios. Manda por texto.',
+-        );
+-        return new NextResponse(
+-          '<?xml version="1.0" encoding="UTF-8"?><Response></Response>',
+-          { headers: { 'Content-Type': 'text/xml' } },
+-        );
++        await sendWhatsApp(from, 'Ainda n\u00e3o consigo ouvir \u00e1udios. Manda por texto.');
++        return new NextResponse(TWIML_EMPTY, { headers: TWIML_HEADERS });
+       }
+     }
+ 
+-    if (!body) {
++    if (body === '') {
+       return NextResponse.json({ error: 'Missing params' }, { status: 400 });
+     }
+ 
+-    // Await processing — Vercel kills the function after response
++    if (isDuplicate(from, body)) {
++      console.log('Dedup: ignoring duplicate from', from);
++      return new NextResponse(TWIML_EMPTY, { headers: TWIML_HEADERS });
++    }
++
+     await routeMessage(from, body, audioTranscription);
+ 
+-    // TwiML empty response (Twilio expects this)
+-    return new NextResponse(
+-      '<?xml version="1.0" encoding="UTF-8"?><Response></Response>',
+-      { headers: { 'Content-Type': 'text/xml' } }
+-    );
++    return new NextResponse(TWIML_EMPTY, { headers: TWIML_HEADERS });
+   } catch (err) {
+     console.error('Webhook error:', err);
+     return NextResponse.json({ error: 'Internal error' }, { status: 500 });
+diff --git a/src/app/debug/page.tsx b/src/app/debug/page.tsx
+new file mode 100755
+index 0000000..ed28d77
+--- /dev/null
++++ b/src/app/debug/page.tsx
+@@ -0,0 +1,213 @@
++'use client';
++
++import { useEffect, useState } from 'react';
++
++interface LogEntry {
++  id: string;
++  user_id: string;
++  timestamp: string;
++  incoming_message: string;
++  detected_intent: string;
++  pending_action_found: string | null;
++  handler_used: string;
++  parsed_data: Record<string, any> | null;
++  response_sent: string;
++  error: string | null;
++  processing_time_ms: number;
++}
++
++export default function DebugPage() {
++  const [logs, setLogs] = useState<LogEntry[]>([]);
++  const [loading, setLoading] = useState(true);
++  const [error, setError] = useState<string | null>(null);
++  const [expandedId, setExpandedId] = useState<string | null>(null);
++  const [autoRefresh, setAutoRefresh] = useState(true);
++
++  const fetchLogs = async () => {
++    try {
++      const res = await fetch('/api/debug');
++      const data = await res.json();
++      if (data.error) {
++        setError(data.error);
++      } else {
++        setLogs(data.logs || []);
++        setError(null);
++      }
++    } catch (err) {
++      setError('Failed to fetch logs');
++    } finally {
++      setLoading(false);
++    }
++  };
++
++  useEffect(() => {
++    fetchLogs();
++    if (autoRefresh) {
++      const interval = setInterval(fetchLogs, 5000);
++      return () => clearInterval(interval);
++    }
++  }, [autoRefresh]);
++
++  const fmtTime = (ts: string) => {
++    const d = new Date(ts);
++    return d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
++  };
++
++  const fmtDate = (ts: string) => {
++    const d = new Date(ts);
++    return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
++  };
++
++  const intentColor = (intent: string) => {
++    if (intent.startsWith('query')) return '#8b5cf6';
++    if (intent === 'expense') return '#22c55e';
++    if (intent === 'income') return '#3b82f6';
++    if (intent === 'pending_response') return '#f59e0b';
++    if (intent === 'undo') return '#ef4444';
++    if (intent === 'fallback') return '#71717a';
++    return '#a1a1aa';
++  };
++
++  return (
++    <div style={{
++      background: '#0a0a0b', color: '#fafafa', minHeight: '100vh',
++      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif',
++      padding: '24px 16px',
++    }}>
++      <div style={{ maxWidth: 1200, margin: '0 auto' }}>
++        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
++          <div>
++            <h1 style={{ fontSize: 24, fontWeight: 700, margin: 0 }}>Caixinha Debug</h1>
++            <p style={{ color: '#71717a', fontSize: 13, margin: '4px 0 0' }}>
++              Caixa-preta — {logs.length} logs carregados
++            </p>
++          </div>
++          <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
++            <label style={{ color: '#a1a1aa', fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
++              <input
++                type="checkbox"
++                checked={autoRefresh}
++                onChange={(e) => setAutoRefresh(e.target.checked)}
++              />
++              Auto-refresh 5s
++            </label>
++            <button
++              onClick={fetchLogs}
++              style={{
++                background: '#27272a', border: '1px solid #3f3f46', color: '#fafafa',
++                padding: '6px 14px', borderRadius: 6, cursor: 'pointer', fontSize: 13,
++              }}
++            >
++              Refresh
++            </button>
++          </div>
++        </div>
++
++        {error && (
++          <div style={{
++            background: '#1c1017', border: '1px solid #7f1d1d', borderRadius: 8,
++            padding: '12px 16px', marginBottom: 16, color: '#fca5a5', fontSize: 14,
++          }}>
++            {error}
++          </div>
++        )}
++
++        {loading ? (
++          <p style={{ color: '#71717a' }}>Carregando...</p>
++        ) : logs.length === 0 ? (
++          <div style={{
++            background: '#141418', border: '1px solid #27272a', borderRadius: 8,
++            padding: '40px 20px', textAlign: 'center', color: '#71717a',
++          }}>
++            Nenhum log ainda. Manda uma mensagem no WhatsApp e atualiza.
++          </div>
++        ) : (
++          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
++            {logs.map((log) => (
++              <div
++                key={log.id}
++                onClick={() => setExpandedId(expandedId === log.id ? null : log.id)}
++                style={{
++                  background: log.error ? '#1c1017' : '#141418',
++                  border: `1px solid ${log.error ? '#7f1d1d' : '#27272a'}`,
++                  borderRadius: 8, padding: '14px 18px', cursor: 'pointer',
++                  transition: 'border-color 0.15s',
++                }}
++              >
++                {/* Header row */}
++                <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
++                  <span style={{ color: '#71717a', fontSize: 12, fontFamily: 'monospace', minWidth: 90 }}>
++                    {fmtDate(log.timestamp)} {fmtTime(log.timestamp)}
++                  </span>
++                  <span style={{
++                    background: intentColor(log.detected_intent) + '22',
++                    color: intentColor(log.detected_intent),
++                    padding: '2px 8px', borderRadius: 4, fontSize: 12, fontWeight: 600,
++                    fontFamily: 'monospace',
++                  }}>
++                    {log.detected_intent}
++                  </span>
++                  <span style={{ color: '#a1a1aa', fontSize: 12, fontFamily: 'monospace' }}>
++                    {log.handler_used}
++                  </span>
++                  <span style={{ color: '#71717a', fontSize: 11, fontFamily: 'monospace', marginLeft: 'auto' }}>
++                    {log.processing_time_ms}ms
++                  </span>
++                </div>
++
++                {/* Message */}
++                <div style={{ marginTop: 8 }}>
++                  <span style={{ color: '#22c55e', fontSize: 13, fontFamily: 'monospace' }}>IN: </span>
++                  <span style={{ color: '#fafafa', fontSize: 14 }}>{log.incoming_message}</span>
++                </div>
++                <div style={{ marginTop: 4 }}>
++                  <span style={{ color: '#3b82f6', fontSize: 13, fontFamily: 'monospace' }}>OUT: </span>
++                  <span style={{ color: '#a1a1aa', fontSize: 14 }}>
++                    {log.response_sent.length > 120
++                      ? log.response_sent.substring(0, 120) + '...'
++                      : log.response_sent}
++                  </span>
++                </div>
++
++                {log.error && (
++                  <div style={{ marginTop: 6, color: '#fca5a5', fontSize: 13, fontFamily: 'monospace' }}>
++                    ERROR: {log.error.substring(0, 200)}
++                  </div>
++                )}
++
++                {log.pending_action_found && (
++                  <div style={{ marginTop: 4, color: '#f59e0b', fontSize: 12, fontFamily: 'monospace' }}>
++                    PENDING: {log.pending_action_found}
++                  </div>
++                )}
++
++                {/* Expanded details */}
++                {expandedId === log.id && (
++                  <div style={{
++                    marginTop: 12, paddingTop: 12, borderTop: '1px solid #27272a',
++                  }}>
++                    <pre style={{
++                      background: '#0a0a0b', padding: 12, borderRadius: 6,
++                      fontSize: 12, fontFamily: 'monospace', color: '#a1a1aa',
++                      overflow: 'auto', maxHeight: 300, whiteSpace: 'pre-wrap',
++                    }}>
++{JSON.stringify({
++  user_id: log.user_id,
++  parsed_data: log.parsed_data,
++  pending_action_found: log.pending_action_found,
++  handler_used: log.handler_used,
++  processing_time_ms: log.processing_time_ms,
++  error: log.error,
++  response_sent_full: log.response_sent,
++}, null, 2)}
++                    </pre>
++                  </div>
++                )}
++              </div>
++            ))}
++          </div>
++        )}
++      </div>
++    </div>
++  );
++}
+diff --git a/src/handlers/index.ts b/src/handlers/index.ts
+index 84ba3124f9245c07511b97469e99eecda6962a97..2f93649317b38927111ff813f002b75154dfb236 100644
+GIT binary patch
+literal 8237
+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
+Y8gwW4C9mQ;6*Vtymn>gsLfz)*5BlB^PXGV_
+
+delta 1538
+zcmc&!&1+m$6gR1<&5TJujQMaf%}F{*W`=Pl1&h#9D#n;-r6o{MFp}K7cV_0=_wIeZ
+zdnePE;V}_6g5tvKMko}iP+XK2vU5BCf}5@i7WZ~nD1zsGWN=)F;KI9k+;h)6=XcKU
+zoZtPoo}GVqci21{{{FpM4K~p6(7y<6pLq&=RGt(Hq0My@Sj*-TJRj@)7POlvK>JK6
+z%jcfvQUF)cqe7vLJoa!gyp+iRxdhOmF91b<mkS$O3VqlOz-vl@=HSJzN9H4wsf{dU
+zdOy49OAx)grZG~UreD@k$A2s<u$ab%^f@Xse*DUbCR#V4F8#yJ<6jJwp~##z3lwN}
+z6JsD2+9)infaM_b$%Mk@qERxxytHH<zg97g6FcT0J8Obdb7pOHibFAmMrBY{ZS=_*
+z7<|@36_r;yD&o3u0%!?a5+DI`4}G88NS<i|U{>6YUk|<mq}M<<qe$pPePmp#s@WQS
+zZut0=*~l)OPEdWk@=57ZoB>QXn~yO)&2AZMJZ~PqT<zohYU~5Dt@iJQlN+(mA1Cvv
+z?aTOn=kyzWpUpGdW@sYcrEadqP2=^WUIr0qE?0^WCfR`=i}M~e4DD*#@nD<VrIf{#
+z$s0tgmf$jNHHn|7z^Kat?QO2njaq0!y|up|BtGPD2KG2hZmS8C!J$3z+fX4*97T>!
+zlDjf!HJg*?#s+LgPd+i9PZgUxg-#0B#{MvdK$P?!m@8XChgG=I`vK6U2i0mch*zo+
+zUHK^w2TX#w7+!&*;%<#bQI>WhYRt7)bLRHcSoz;4G~Ma57kc+7L?zi3Px_iB(qa4P
+zSF6<|a8fov80|}X;vsl@W^wJWq<JiGX}iEh-IVq}Q<wT~$G(RTW;#RWquls#?<eEr
+z=Ht<LXXezmv!nSafpk3wHG*y;;4PYCg$We1lASi|v&-o$O`0dO6FG|{K|`H6&Mu=B
+zyquz5zD8SnHDAv4?y=r|IR9pa^uxkk4i{Edz$WVH{dPY83X8S?NGI&#Q4o_oyJnW=
+z*1NTGIRj<*FqR+oHvx*^B_cE^JOh$MJ}xT78dO3VNG=*&(74ew`qHH>-ILrx5K?26
+z9BP?*OC<XmNuJrCd;j&F-|u|$BV2Fo@r$rf=nUiv7q-NfD0GgLF*L_uu}kw2W?uN;
+J&gK7<`A=pa#lQdn
+
+diff --git a/src/handlers/pending.ts b/src/handlers/pending.ts
+index 6ed6846..556cee6 100644
+--- a/src/handlers/pending.ts
++++ b/src/handlers/pending.ts
+@@ -3,9 +3,39 @@ import { sendWhatsApp } from '@/lib/twilio';
+ import { resolveCategory, suggestCategory, matchCategory } from '@/lib/categories';
+ import { PendingAction, ParsedMessage } from '@/types';
+ import { normalize } from '@/lib/formatter';
++import { monthLabel } from '@/lib/formatter';
+ import { handleExpense } from './expense';
+ import { v4 as uuidv4 } from 'uuid';
+ 
++/**
++ * Reconstruct Date objects and month_label after JSON deserialization.
++ * When ParsedMessage is stored in Supabase JSONB, Date objects become
++ * ISO strings. This function restores them so handleExpense works.
++ */
++function hydrateParsed(raw: any): ParsedMessage {
++  const parsed = { ...raw } as ParsedMessage;
++  parsed.date = parsed.date ? new Date(parsed.date as any) : new Date();
++  if (parsed.month_label === undefined || parsed.month_label === null) {
++    parsed.month_label = monthLabel(parsed.date);
++  }
++  return parsed;
++}
++
++const PAYMENT_KEYWORDS: Array<{ pattern: RegExp; method: string }> = [
++  { pattern: /cr[eé]dito|cartao|cartão/, method: 'Crédito' },
++  { pattern: /d[eé]bito/, method: 'Débito' },
++  { pattern: /pix/, method: 'Pix' },
++  { pattern: /dinheiro|cash|esp[eé]cie/, method: 'Dinheiro' },
++];
++
++function matchPaymentMethod(msg: string): string | null {
++  const low = msg.toLowerCase();
++  for (const { pattern, method } of PAYMENT_KEYWORDS) {
++    if (pattern.test(low)) return method;
++  }
++  return null;
++}
++
+ export async function handlePending(
+   userId: string,
+   phone: string,
+@@ -16,44 +46,48 @@ export async function handlePending(
+ 
+   try {
+     if (pending.type === 'category') {
+-      // Message is response to category suggestion
+-      const payload = pending.payload as { parsed: ParsedMessage; suggestedCategoryId?: string };
+-      const parsed = payload.parsed;
++      const payload = pending.payload as { parsed: any; suggestedCategoryId?: string };
++      const parsed = hydrateParsed(payload.parsed);
+ 
+-      // Check if user is confirming suggestion
+-      if (payload.suggestedCategoryId && /^(sim|s|isso|ok|tá|ta)$/.test(msgNorm)) {
+-        // Use suggested category
++      if (payload.suggestedCategoryId && /^(sim|s|isso|ok|tá|ta|yes|y)$/.test(msgNorm)) {
+         parsed.category_id = payload.suggestedCategoryId;
++      } else if (/^(n[ãa]o|nao|n|nope)$/.test(msgNorm)) {
++        await supabaseAdmin.from('pending_actions').delete().eq('id', pending.id);
++        const newPending: PendingAction = {
++          id: uuidv4(),
++          user_id: userId,
++          type: 'category',
++          payload: { parsed },
++          expires_at: new Date(Date.now() + 10 * 60000).toISOString(),
++          created_at: new Date().toISOString(),
++        };
++        await supabaseAdmin.from('pending_actions').insert([newPending]);
++        return 'Beleza. Em qual categoria então? (alimentação, transporte, lazer...)';
+       } else {
+-        // Try to resolve category from message
+         const resolved = await resolveCategory(message, userId);
+         if (resolved) {
+           parsed.category_id = resolved.id;
+         } else {
+-          // Category not resolved, ask again
+           const suggested = await suggestCategory(parsed.description, userId);
++          await supabaseAdmin.from('pending_actions').delete().eq('id', pending.id);
+           const newPending: PendingAction = {
+             id: uuidv4(),
+             user_id: userId,
+             type: 'category',
+-            payload: {
+-              parsed,
+-              suggestedCategoryId: suggested?.id,
+-            },
++            payload: { parsed, suggestedCategoryId: suggested?.id },
+             expires_at: new Date(Date.now() + 10 * 60000).toISOString(),
+             created_at: new Date().toISOString(),
+           };
+           await supabaseAdmin.from('pending_actions').insert([newPending]);
+-
+           if (suggested) {
+-            return `Entendi. Tá em ${suggested.emoji} ${suggested.name}? (sim/não)`;
++            return `Não achei essa categoria. Tá em ${suggested.emoji} ${suggested.name}? (sim/não)`;
+           }
+-          return 'Em qual categoria? (alimentação, transporte, lazer...)';
++          return 'Não achei essa categoria. Qual é? (alimentação, transporte, lazer...)';
+         }
+       }
+ 
+-      // Now check if we need payment method
+-      if (!parsed.payment_method) {
++      if (parsed.payment_method === null || parsed.payment_method === undefined) {
++        await supabaseAdmin.from('pending_actions').delete().eq('id', pending.id);
+         const newPending: PendingAction = {
+           id: uuidv4(),
+           user_id: userId,
+@@ -63,35 +97,20 @@ export async function handlePending(
+           created_at: new Date().toISOString(),
+         };
+         await supabaseAdmin.from('pending_actions').insert([newPending]);
+-
+-        await supabaseAdmin.from('pending_actions').delete().eq('id', pending.id);
+-
+         return 'Crédito, pix ou dinheiro?';
+       }
+ 
+-      // Complete the expense
+-      const response = await handleExpense(userId, parsed, phone);
+-
+-      // Delete pending action
+       await supabaseAdmin.from('pending_actions').delete().eq('id', pending.id);
+-
+-      return response;
++      return await handleExpense(userId, parsed, phone);
+     }
+ 
+     if (pending.type === 'payment_method') {
+-      // Message is response to payment method question
+-      const payload = pending.payload as { parsed: ParsedMessage };
+-      const parsed = payload.parsed;
++      const payload = pending.payload as { parsed: any };
++      const parsed = hydrateParsed(payload.parsed);
+ 
+-      const msgLow = message.toLowerCase();
+-      if (msgLow.includes('credito') || msgLow.includes('crédito')) {
+-        parsed.payment_method = 'Crédito';
+-      } else if (msgLow.includes('pix')) {
+-        parsed.payment_method = 'Pix';
+-      } else if (msgLow.includes('dinheiro') || msgLow.includes('cash') || msgLow.includes('especie')) {
+-        parsed.payment_method = 'Dinheiro';
+-      } else {
+-        // Invalid payment method, ask again
++      const method = matchPaymentMethod(message);
++      if (method === null) {
++        await supabaseAdmin.from('pending_actions').delete().eq('id', pending.id);
+         const newPending: PendingAction = {
+           id: uuidv4(),
+           user_id: userId,
+@@ -101,24 +120,19 @@ export async function handlePending(
+           created_at: new Date().toISOString(),
+         };
+         await supabaseAdmin.from('pending_actions').insert([newPending]);
+-
+-        await supabaseAdmin.from('pending_actions').delete().eq('id', pending.id);
+-
+-        return 'Crédito, pix ou dinheiro?';
++        return 'Não entendi. Crédito, débito, pix ou dinheiro?';
+       }
+ 
+-      // Complete the expense
+-      const response = await handleExpense(userId, parsed, phone);
+-
+-      // Delete pending action
++      parsed.payment_method = method;
+       await supabaseAdmin.from('pending_actions').delete().eq('id', pending.id);
+-
+-      return response;
++      return await handleExpense(userId, parsed, phone);
+     }
+ 
+-    return 'Pending action inválido.';
++    await supabaseAdmin.from('pending_actions').delete().eq('id', pending.id);
++    return 'Algo deu errado. Manda o gasto de novo do início.';
+   } catch (e) {
+     console.error('Pending action error:', e);
+     await supabaseAdmin.from('pending_actions').delete().eq('id', pending.id);
+-    return 'Erro ao processar. Tenta de novo.';
+-  }
+\ No newline at end of file
++    return 'Deu ruim ao registrar. Manda o gasto de novo do início.';
++  }
++}
+diff --git a/src/lib/anomaly.ts b/src/lib/anomaly.ts
+index 4048cb3..dc2759b 100644
+--- a/src/lib/anomaly.ts
++++ b/src/lib/anomaly.ts
+@@ -5,19 +5,15 @@ import { Transaction } from '@/types';
+ 
+ export async function checkAnomalies(userId: string, transaction: Transaction): Promise<string | null> {
+   try {
+-    // 1. Check amount > 2x category average (last 30 days)
+     const alert = await checkHighAmount(userId, transaction);
+     if (alert) return alert;
+ 
+-    // 2. Check category accumulated > user-defined limit
+     const limitAlert = await checkCategoryLimit(userId, transaction);
+     if (limitAlert) return limitAlert;
+ 
+-    // 3. Check frequency (>5 in same category in 24h)
+     const frequencyAlert = await checkFrequency(userId, transaction);
+     if (frequencyAlert) return frequencyAlert;
+ 
+-    // 4. Check pace (current month > 30% above same period last month)
+     const paceAlert = await checkPace(userId, transaction);
+     if (paceAlert) return paceAlert;
+ 
+@@ -31,7 +27,6 @@ export async function checkAnomalies(userId: string, transaction: Transaction):
+ async function checkHighAmount(userId: string, transaction: Transaction): Promise<string | null> {
+   if (!transaction.category_id) return null;
+ 
+-  // Get last 30 days of transactions in same category (excluding current)
+   const thirtyDaysAgo = new Date(Date.now() - 30 * 86400000);
+   const { data: categoryTxs } = await supabaseAdmin
+     .from('transactions')
+@@ -41,17 +36,16 @@ async function checkHighAmount(userId: string, transaction: Transaction): Promis
+     .eq('category_id', transaction.category_id)
+     .gte('date', thirtyDaysAgo.toISOString());
+ 
+-  // Exclude the transaction we just inserted from the average calculation
++  // Exclude the transaction we just inserted
+   const previous = (categoryTxs || []).filter((tx) => tx.id !== transaction.id);
+ 
+   // Need at least 5 previous transactions for a meaningful average
+   if (previous.length < 5) return null;
+ 
+   const avg = previous.reduce((sum, tx) => sum + tx.amount, 0) / previous.length;
+-  const threshold = avg * 2.5; // 2.5x instead of 2x to reduce false positives
++  const threshold = avg * 2.5;
+ 
+   if (transaction.amount > threshold) {
+-    // Get category info for emoji
+     const { data: cat } = await supabaseAdmin
+       .from('categories')
+       .select('name, emoji')
+@@ -74,19 +68,17 @@ async function checkHighAmount(userId: string, transaction: Transaction): Promis
+ async function checkCategoryLimit(userId: string, transaction: Transaction): Promise<string | null> {
+   if (!transaction.category_id) return null;
+ 
+-  // Get user config for category limit
+   const { data: config } = await supabaseAdmin
+     .from('config')
+     .select('value')
+     .eq('user_id', userId)
+-    .eq('key', `category_limit_${transaction.category_id}`)
++    .eq('key', 'category_limit_' + transaction.category_id)
+     .single();
+ 
+   if (!config || !config.value?.limit) return null;
+ 
+   const limit = config.value.limit;
+ 
+-  // Get current month accumulated for this category
+   const now = new Date();
+   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+   const { data: monthTxs } = await supabaseAdmin
+@@ -101,7 +93,6 @@ async function checkCategoryLimit(userId: string, transaction: Transaction): Pro
+   const totalWithNew = (monthTxs || []).reduce((sum, tx) => sum + tx.amount, 0) + transaction.amount;
+ 
+   if (totalWithNew > limit) {
+-    // Get category info
+     const { data: cat } = await supabaseAdmin
+       .from('categories')
+       .select('name, emoji')
+@@ -124,7 +115,6 @@ async function checkCategoryLimit(userId: string, transaction: Transaction): Pro
+ async function checkFrequency(userId: string, transaction: Transaction): Promise<string | null> {
+   if (!transaction.category_id) return null;
+ 
+-  // Count transactions in this category in last 24h (after adding current one)
+   const oneDayAgo = new Date(Date.now() - 24 * 86400000);
+   const { data: recentTxs } = await supabaseAdmin
+     .from('transactions')
+@@ -134,10 +124,9 @@ async function checkFrequency(userId: string, transaction: Transaction): Promise
+     .eq('category_id', transaction.category_id)
+     .gte('date', oneDayAgo.toISOString());
+ 
+-  const count = (recentTxs || []).length + 1; // +1 for current transaction
++  const count = (recentTxs || []).length + 1;
+ 
+   if (count > 5) {
+-    // Get category info
+     const { data: cat } = await supabaseAdmin
+       .from('categories')
+       .select('name, emoji')
+@@ -161,7 +150,6 @@ async function checkPace(userId: string, transaction: Transaction): Promise<stri
+   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+   const dayOfMonth = now.getDate();
+ 
+-  // Get current month accumulated (including this transaction)
+   const { data: monthTxs } = await supabaseAdmin
+     .from('transactions')
+     .select('amount')
+@@ -172,7 +160,6 @@ async function checkPace(userId: string, transaction: Transaction): Promise<stri
+ 
+   const currentMonthTotal = (monthTxs || []).reduce((sum, tx) => sum + tx.amount, 0) + transaction.amount;
+ 
+-  // Get same period last month
+   const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+   const lastMonthLabel = monthLabel(new Date(now.getFullYear(), now.getMonth() - 1, 1));
+   const { data: lastMonthTxs } = await supabaseAdmin
+@@ -183,7 +170,6 @@ async function checkPace(userId: string, transaction: Transaction): Promise<stri
+     .eq('month_label', lastMonthLabel)
+     .gte('date', lastMonthStart.toISOString());
+ 
+-  // Compare same day period of last month
+   const sameDataLastMonth = (lastMonthTxs || [])
+     .filter((tx) => {
+       const txDate = new Date(tx.date || '');
+@@ -193,6 +179,18 @@ async function checkPace(userId: string, transaction: Transaction): Promise<stri
+ 
+   if (sameDataLastMonth === 0) return null;
+ 
+-  // Project the month
+-  const projectedMonth = (currentMonthTotal / dayOfMonth) * 30; // assuming 30 days
+-  const threshol
+\ No newline at end of file
++  const projectedMonth = (currentMonthTotal / dayOfMonth) * 30;
++  const threshold = sameDataLastMonth * 1.3;
++
++  if (projectedMonth > threshold) {
++    const alertData: AnomalyAlertData = {
++      type: 'pace',
++      projectedMonth,
++      monthBudget: sameDataLastMonth,
++    };
++
++    return buildAnomalyAlert(alertData);
++  }
++
++  return null;
++}
+diff --git a/src/lib/debug-log.ts b/src/lib/debug-log.ts
+new file mode 100755
+index 0000000..631904a
+--- /dev/null
++++ b/src/lib/debug-log.ts
+@@ -0,0 +1,66 @@
++import { supabaseAdmin } from './supabase';
++
++export interface DebugLogEntry {
++  user_id: string;
++  incoming_message: string;
++  detected_intent: string;
++  pending_action_found: string | null;
++  handler_used: string;
++  parsed_data: Record<string, any> | null;
++  response_sent: string;
++  error: string | null;
++  processing_time_ms: number;
++}
++
++/**
++ * Writes a debug log entry to the debug_logs table.
++ * Never throws — logging failures are silently caught.
++ */
++export async function writeDebugLog(entry: DebugLogEntry): Promise<void> {
++  try {
++    await supabaseAdmin.from('debug_logs').insert([{
++      ...entry,
++      timestamp: new Date().toISOString(),
++    }]);
++  } catch (err) {
++    console.error('Debug log write failed:', err);
++  }
++}
++
++/**
++ * Helper to create a log context that collects data as the request is processed.
++ */
++export function createDebugContext(userId: string, incomingMessage: string) {
++  const startTime = Date.now();
++  const ctx: DebugLogEntry = {
++    user_id: userId,
++    incoming_message: incomingMessage,
++    detected_intent: 'unknown',
++    pending_action_found: null,
++    handler_used: 'none',
++    parsed_data: null,
++    response_sent: '',
++    error: null,
++    processing_time_ms: 0,
++  };
++
++  return {
++    /** Set the detected intent */
++    setIntent(intent: string) { ctx.detected_intent = intent; },
++    /** Set pending action info */
++    setPending(info: string) { ctx.pending_action_found = info; },
++    /** Set which handler processed the message */
++    setHandler(handler: string) { ctx.handler_used = handler; },
++    /** Set parsed data */
++    setParsed(data: Record<string, any>) { ctx.parsed_data = data; },
++    /** Set the response that was sent */
++    setResponse(response: string) { ctx.response_sent = response; },
++    /** Set error info */
++    setError(error: string) { ctx.error = error; },
++    /** Flush the log to the database */
++    async flush() {
++      ctx.processing_time_ms = Date.now() - startTime;
++      await writeDebugLog(ctx);
++    },
++  };
++}
+diff --git a/tests/regression.md b/tests/regression.md
+new file mode 100755
+index 0000000..d3593ab
+--- /dev/null
++++ b/tests/regression.md
+@@ -0,0 +1,85 @@
++# CAIXINHA — Testes de Regressão Obrigatórios
++
++> Nenhum deploy sobe sem todos esses casos passando.
++> Testar no WhatsApp real antes de considerar pronto.
++
++---
++
++## Caso 1: Registro simples com categoria e pagamento
++
++**Entrada:** `uber 22 pix`
++**Saída esperada:** Confirmação com dados (descrição, valor, categoria, forma de pagamento)
++**Formato:** `✅ Anotado, [nome]. uber, R$ 22,00 em transporte 🚗. Pix. Hoje.`
++**Última correção:** 2026-04-16
++
++---
++
++## Caso 2: Pergunta de categoria + resposta
++
++**Entrada 1:** `agua 5 pix`
++**Saída 1:** Pergunta de categoria (ex: `Água de 5. Em qual categoria?`)
++**Entrada 2:** `alimentacao` (ou `alimentação`)
++**Saída 2:** Confirmação com dados completos OU pergunta de pagamento se pagamento não veio na mensagem original
++**NUNCA:** `Erro ao processar. Tenta de novo.`
++**Bug original:** Date serialization — parsed.date vira string ao salvar no Supabase JSONB, quebrando .toISOString()
++**Última correção:** 2026-04-16
++
++---
++
++## Caso 3: Pergunta de pagamento + resposta
++
++**Entrada 1:** `agua 5` (sem forma de pagamento)
++**Saída 1:** Pergunta de categoria (se categoria não foi auto-detectada) ou pergunta de pagamento
++**Entrada N:** `pix`
++**Saída N:** Confirmação com dados completos
++**NUNCA:** `Erro ao processar. Tenta de novo.`
++**Bug original:** Mesmo bug de Date serialization do Caso 2
++**Última correção:** 2026-04-16
++
++---
++
++## Caso 4: Undo / Desfazer
++
++**Entrada:** `apaga o ultimo` (ou `desfaz`, `cancela`)
++**Saída esperada:** Confirmação do que foi apagado com descrição e valor
++**NUNCA:** Apagar sem confirmar qual transação
++**Última correção:** 2026-04-16
++
++---
++
++## Caso 5: Consulta resumo mensal
++
++**Entrada:** `quanto gastei esse mes` (ou `resumo`, `como tô`)
++**Saída esperada:** Breakdown por categoria com emojis, totais, saldo
++**Formato:** Categorias listadas com emoji, nome, valor e contagem
++**Última correção:** 2026-04-16
++
++---
++
++## Caso 6: Áudio (quando OPENAI_API_KEY estiver configurada)
++
++**Entrada:** Áudio de voz dizendo "café dez reais pix"
++**Saída esperada:** `🎤 Ouvi: "café dez reais pix"` + confirmação com dados
++**Sem OPENAI_API_KEY:** `Ainda não consigo ouvir áudios. Manda por texto.`
++**Última correção:** 2026-04-16 (implementado, aguardando key)
++
++---
++
++## Regras gerais que nunca podem quebrar
++
++1. **"Erro ao processar. Tenta de novo." genérico é proibido.** Se falhou, dar contexto útil.
++2. **"acima da média" só aparece com 5+ transações anteriores na categoria E valor 2.5x acima da média real.**
++3. **Mensagens duplicadas (mesma mensagem, mesmo número, <3s) são ignoradas.**
++4. **Pending actions expiram em 10 minutos, não 5.**
++5. **Pending action tem prioridade 2 no router (só undo passa por cima).**
++6. **Date objects são reconstituídos após deserialização do Supabase JSONB.**
++
++---
++
++## Como testar
++
++1. Abrir WhatsApp, conversa com o bot Twilio
++2. Testar cada caso na ordem
++3. Verificar se a saída corresponde ao esperado
++4. Se qualquer caso falhar, NÃO fazer deploy
++5. Documentar a falha e a data aqui antes de corrigir
+-- 
+2.34.1
+

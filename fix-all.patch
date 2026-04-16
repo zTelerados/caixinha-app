@@ -1,0 +1,1311 @@
+From 81e26a026c8ed877a2202766f175b0b9550e4b3d Mon Sep 17 00:00:00 2001
+From: Thiago Ribeiro <tmr.flu123123@hotmail.com>
+Date: Thu, 16 Apr 2026 19:22:38 +0000
+Subject: [PATCH] feat: debug logging (caixa-preta) + fix Date serialization +
+ dedup
+
+- Add debug_logs system: every message logs intent, handler, parsed data, response, errors, timing
+- Add /debug page: dark mode dashboard showing last 50 logs with auto-refresh
+- Add /api/debug endpoint serving log data
+- Fix pending handler: hydrateParsed() reconstructs Date after JSON deserialization (root cause of 'Erro ao processar')
+- Fix anomaly.ts: require min 5 transactions + 2.5x threshold (fixes false 'acima da media')
+- Fix anomaly.ts: file was truncated, fully reconstructed
+- Add message deduplication in webhook (3s window)
+- Move pending check to Priority 2 in router (only undo overrides)
+- Increase pending timeout to 10 minutes
+- Add sql/create_debug_logs.sql migration
+- Add tests/regression.md with 6 mandatory test cases
+- Update painel.html with realistic percentages (60%)
+---
+ DIAGNOSTICO_CAIXINHA.md      |   2 +-
+ diagnostic-history.json      |  18 +++
+ diagnostico.html             |  46 ++++----
+ package-lock.json            |  12 --
+ painel.html                  |  88 ++++++++-------
+ sql/create_debug_logs.sql    |  35 ++++++
+ src/app/api/debug/route.ts   |  20 ++++
+ src/app/api/webhook/route.ts |  54 ++++++---
+ src/app/debug/page.tsx       | 213 +++++++++++++++++++++++++++++++++++
+ src/handlers/index.ts        | Bin 6392 -> 8656 bytes
+ src/handlers/pending.ts      | 118 ++++++++++---------
+ src/lib/anomaly.ts           |  40 ++++---
+ src/lib/debug-log.ts         |  66 +++++++++++
+ tests/regression.md          |  85 ++++++++++++++
+ 14 files changed, 627 insertions(+), 170 deletions(-)
+ create mode 100755 sql/create_debug_logs.sql
+ create mode 100755 src/app/api/debug/route.ts
+ create mode 100755 src/app/debug/page.tsx
+ create mode 100755 src/lib/debug-log.ts
+ create mode 100755 tests/regression.md
+
+diff --git a/DIAGNOSTICO_CAIXINHA.md b/DIAGNOSTICO_CAIXINHA.md
+index 2a576ae..a30b622 100644
+--- a/DIAGNOSTICO_CAIXINHA.md
++++ b/DIAGNOSTICO_CAIXINHA.md
+@@ -76,6 +76,7 @@ Esses modulos permanecem em 0% ou baixo percentual de forma proposital. Quando c
+ 
+ ## Historico de Versoes
+ 
++- **6bb1ed2** — progresso geral 61% (16 de abril de 2026)
+ - **d765e8b** — progresso geral 61% (16 de abril de 2026)
+ - **93deafd** — progresso geral 61% (16 de abril de 2026)
+ - **4f5528c** — progresso geral 61% (16 de abril de 2026)
+@@ -85,4 +86,3 @@ Esses modulos permanecem em 0% ou baixo percentual de forma proposital. Quando c
+ - **2578672** — progresso geral 61% (16 de abril de 2026)
+ - **cc31161** — progresso geral 61% (16 de abril de 2026)
+ - **42c2e9b** — progresso geral 61% (15 de abril de 2026)
+-- **45dff43** — progresso geral 61% (12 de abril de 2026)
+diff --git a/diagnostic-history.json b/diagnostic-history.json
+index a882d72..e186dac 100644
+--- a/diagnostic-history.json
++++ b/diagnostic-history.json
+@@ -340,5 +340,23 @@
+       "Multi-usuario (preparacao)": 0,
+       "Integracao WhatsApp Oficial": 0
+     }
++  },
++  {
++    "date": "16 de abril de 2026",
++    "timestamp": "2026-04-16T19:22:40.779Z",
++    "overall": 61,
++    "commit": "d929afc",
++    "modules": {
++      "Bot WhatsApp / Conversacao": 87,
++      "Categorizacao Inteligente": 85,
++      "Banco de Dados / Persistencia": 82,
++      "Dashboard Web": 92,
++      "Acesso Mobile (PWA)": 73,
++      "Relatorios e Insights": 100,
++      "Identidade Visual / Branding": 0,
++      "Infraestrutura / Deploy": 88,
++      "Multi-usuario (preparacao)": 0,
++      "Integracao WhatsApp Oficial": 0
++    }
+   }
+ ]
+diff --git a/diagnostico.html b/diagnostico.html
+index 899bf64..0d68409 100644
+--- a/diagnostico.html
++++ b/diagnostico.html
+@@ -250,32 +250,32 @@
+       <text class="chart-label" x="32" y="64" text-anchor="end">75%</text>
+       <line class="chart-grid" x1="40" y1="40" x2="820" y2="40"/>
+       <text class="chart-label" x="32" y="44" text-anchor="end">100%</text>
+-        <path class="chart-area" d="M 40 68.8 L 85.88235294117646 68 L 131.76470588235293 68 L 177.64705882352942 68 L 223.52941176470588 78.4 L 269.4117647058823 78.4 L 315.29411764705884 71.2 L 361.1764705882353 71.2 L 407.05882352941177 71.2 L 452.94117647058823 71.2 L 498.8235294117647 71.2 L 544.7058823529412 71.2 L 590.5882352941177 71.2 L 636.4705882352941 71.2 L 682.3529411764706 71.2 L 728.2352941176471 71.2 L 774.1176470588235 71.2 L 820 71.2 L 820 120 L 40 120 Z"/>
+-        <path class="chart-line" d="M 40 68.8 L 85.88235294117646 68 L 131.76470588235293 68 L 177.64705882352942 68 L 223.52941176470588 78.4 L 269.4117647058823 78.4 L 315.29411764705884 71.2 L 361.1764705882353 71.2 L 407.05882352941177 71.2 L 452.94117647058823 71.2 L 498.8235294117647 71.2 L 544.7058823529412 71.2 L 590.5882352941177 71.2 L 636.4705882352941 71.2 L 682.3529411764706 71.2 L 728.2352941176471 71.2 L 774.1176470588235 71.2 L 820 71.2"/>
++        <path class="chart-area" d="M 40 68.8 L 83.33333333333334 68 L 126.66666666666667 68 L 170 68 L 213.33333333333334 78.4 L 256.6666666666667 78.4 L 300 71.2 L 343.33333333333337 71.2 L 386.6666666666667 71.2 L 430 71.2 L 473.33333333333337 71.2 L 516.6666666666667 71.2 L 560 71.2 L 603.3333333333334 71.2 L 646.6666666666667 71.2 L 690 71.2 L 733.3333333333334 71.2 L 776.6666666666667 71.2 L 820 71.2 L 820 120 L 40 120 Z"/>
++        <path class="chart-line" d="M 40 68.8 L 83.33333333333334 68 L 126.66666666666667 68 L 170 68 L 213.33333333333334 78.4 L 256.6666666666667 78.4 L 300 71.2 L 343.33333333333337 71.2 L 386.6666666666667 71.2 L 430 71.2 L 473.33333333333337 71.2 L 516.6666666666667 71.2 L 560 71.2 L 603.3333333333334 71.2 L 646.6666666666667 71.2 L 690 71.2 L 733.3333333333334 71.2 L 776.6666666666667 71.2 L 820 71.2"/>
+         <circle class="chart-dot" cx="40" cy="68.8"><title>12 de: 64%</title></circle>
+-      <circle class="chart-dot" cx="85.88235294117646" cy="68"><title>12 de: 65%</title></circle>
+-      <circle class="chart-dot" cx="131.76470588235293" cy="68"><title>12 de: 65%</title></circle>
+-      <circle class="chart-dot" cx="177.64705882352942" cy="68"><title>12 de: 65%</title></circle>
+-      <circle class="chart-dot" cx="223.52941176470588" cy="78.4"><title>12 de: 52%</title></circle>
+-      <circle class="chart-dot" cx="269.4117647058823" cy="78.4"><title>12 de: 52%</title></circle>
+-      <circle class="chart-dot" cx="315.29411764705884" cy="71.2"><title>12 de: 61%</title></circle>
+-      <circle class="chart-dot" cx="361.1764705882353" cy="71.2"><title>12 de: 61%</title></circle>
+-      <circle class="chart-dot" cx="407.05882352941177" cy="71.2"><title>12 de: 61%</title></circle>
+-      <circle class="chart-dot" cx="452.94117647058823" cy="71.2"><title>15 de: 61%</title></circle>
+-      <circle class="chart-dot" cx="498.8235294117647" cy="71.2"><title>16 de: 61%</title></circle>
+-      <circle class="chart-dot" cx="544.7058823529412" cy="71.2"><title>16 de: 61%</title></circle>
+-      <circle class="chart-dot" cx="590.5882352941177" cy="71.2"><title>16 de: 61%</title></circle>
+-      <circle class="chart-dot" cx="636.4705882352941" cy="71.2"><title>16 de: 61%</title></circle>
+-      <circle class="chart-dot" cx="682.3529411764706" cy="71.2"><title>16 de: 61%</title></circle>
+-      <circle class="chart-dot" cx="728.2352941176471" cy="71.2"><title>16 de: 61%</title></circle>
+-      <circle class="chart-dot" cx="774.1176470588235" cy="71.2"><title>16 de: 61%</title></circle>
++      <circle class="chart-dot" cx="83.33333333333334" cy="68"><title>12 de: 65%</title></circle>
++      <circle class="chart-dot" cx="126.66666666666667" cy="68"><title>12 de: 65%</title></circle>
++      <circle class="chart-dot" cx="170" cy="68"><title>12 de: 65%</title></circle>
++      <circle class="chart-dot" cx="213.33333333333334" cy="78.4"><title>12 de: 52%</title></circle>
++      <circle class="chart-dot" cx="256.6666666666667" cy="78.4"><title>12 de: 52%</title></circle>
++      <circle class="chart-dot" cx="300" cy="71.2"><title>12 de: 61%</title></circle>
++      <circle class="chart-dot" cx="343.33333333333337" cy="71.2"><title>12 de: 61%</title></circle>
++      <circle class="chart-dot" cx="386.6666666666667" cy="71.2"><title>12 de: 61%</title></circle>
++      <circle class="chart-dot" cx="430" cy="71.2"><title>15 de: 61%</title></circle>
++      <circle class="chart-dot" cx="473.33333333333337" cy="71.2"><title>16 de: 61%</title></circle>
++      <circle class="chart-dot" cx="516.6666666666667" cy="71.2"><title>16 de: 61%</title></circle>
++      <circle class="chart-dot" cx="560" cy="71.2"><title>16 de: 61%</title></circle>
++      <circle class="chart-dot" cx="603.3333333333334" cy="71.2"><title>16 de: 61%</title></circle>
++      <circle class="chart-dot" cx="646.6666666666667" cy="71.2"><title>16 de: 61%</title></circle>
++      <circle class="chart-dot" cx="690" cy="71.2"><title>16 de: 61%</title></circle>
++      <circle class="chart-dot" cx="733.3333333333334" cy="71.2"><title>16 de: 61%</title></circle>
++      <circle class="chart-dot" cx="776.6666666666667" cy="71.2"><title>16 de: 61%</title></circle>
+       <circle class="chart-dot" cx="820" cy="71.2"><title>16 de: 61%</title></circle>
+         <text class="chart-label" x="40" y="138" text-anchor="middle">12 de</text>
+-      <text class="chart-label" x="177.64705882352942" y="138" text-anchor="middle">12 de</text>
+-      <text class="chart-label" x="315.29411764705884" y="138" text-anchor="middle">12 de</text>
+-      <text class="chart-label" x="452.94117647058823" y="138" text-anchor="middle">15 de</text>
+-      <text class="chart-label" x="590.5882352941177" y="138" text-anchor="middle">16 de</text>
+-      <text class="chart-label" x="728.2352941176471" y="138" text-anchor="middle">16 de</text>
++      <text class="chart-label" x="213.33333333333334" y="138" text-anchor="middle">12 de</text>
++      <text class="chart-label" x="386.6666666666667" y="138" text-anchor="middle">12 de</text>
++      <text class="chart-label" x="560" y="138" text-anchor="middle">16 de</text>
++      <text class="chart-label" x="733.3333333333334" y="138" text-anchor="middle">16 de</text>
+       <text class="chart-label" x="820" y="138" text-anchor="middle">16 de</text>
+       </svg>
+     </div>
+diff --git a/package-lock.json b/package-lock.json
+index ef4fc75..e664dcf 100644
+--- a/package-lock.json
++++ b/package-lock.json
+@@ -579,9 +579,6 @@
+       "cpu": [
+         "arm64"
+       ],
+-      "libc": [
+-        "glibc"
+-      ],
+       "license": "MIT",
+       "optional": true,
+       "os": [
+@@ -598,9 +595,6 @@
+       "cpu": [
+         "arm64"
+       ],
+-      "libc": [
+-        "musl"
+-      ],
+       "license": "MIT",
+       "optional": true,
+       "os": [
+@@ -617,9 +611,6 @@
+       "cpu": [
+         "x64"
+       ],
+-      "libc": [
+-        "glibc"
+-      ],
+       "license": "MIT",
+       "optional": true,
+       "os": [
+@@ -636,9 +627,6 @@
+       "cpu": [
+         "x64"
+       ],
+-      "libc": [
+-        "musl"
+-      ],
+       "license": "MIT",
+       "optional": true,
+       "os": [
+diff --git a/painel.html b/painel.html
+index 70a6b28..6b5a1fd 100644
+--- a/painel.html
++++ b/painel.html
+@@ -233,75 +233,76 @@
+ 
+   <header>
+     <h1>Caixinha — Painel</h1>
+-    <div class="sub">Atualizado em 16 de abril de 2026 — 00h00</div>
++    <div class="sub">Atualizado em 16 de abril de 2026 — 15h30</div>
+   </header>
+ 
+   <section>
+     <div class="label">Onde estamos agora</div>
+-    <div class="fase-titulo">🚀 De bot basico a assistente de verdade</div>
++    <div class="fase-titulo">🔧 Estabilidade primeiro — corrigindo regressoes</div>
+     <div class="analogia">
+-      O Caixinha deixou de ser um anotador e virou um assistente financeiro completo. Agora ele responde com contexto rico (confirmacao + historico da categoria + resumo do mes), entende 15 tipos de pergunta em linguagem natural, transcreve audio, manda resumo automatico todo dia de manha e fechamento semanal no domingo. Tudo com dois tons de voz (cria e neutro) prontos pra quando tiver mais de um usuario. A planilha Espelho continua sincronizando em tempo real. O bot saiu de 61% pra <span style="color:var(--text)">67% de progresso geral</span>.
++      Rodada focada em estabilidade, nao features. Identificamos que o sistema de pendencias (perguntar categoria / pagamento e esperar resposta) tava quebrando porque o JavaScript Date vira string quando salva no Supabase JSON e ninguem reconstituia. Agora o pending handler reconstroi Dates, tem deduplicacao de mensagens, error handling com contexto, e existe um <span style="color:var(--text)">tests/regression.md</span> com 6 casos obrigatorios que precisam passar antes de qualquer deploy. O "acima da media" falso tambem foi blindado (minimo 5 transacoes). Progresso geral caiu de 67% pra <span style="color:var(--text)">60%</span> pra refletir a realidade — algumas coisas que pareciam prontas precisaram de retrabalho.
+     </div>
+   </section>
+ 
+   <section>
+-    <div class="label">O que entrou nessa rodada</div>
++    <div class="label">O que entrou nessa rodada (estabilidade)</div>
+     <div class="card">
+-      <div class="pergunta">Respostas ricas e estruturadas</div>
+-      <div class="porque">Cada registro de gasto ou entrada agora volta com 3 camadas: confirmacao com todos os detalhes, contexto da categoria (ultimos 3-5 itens + subtotal), e resumo mensal com saldo. Link pro dashboard no final.</div>
++      <div class="pergunta">Fix critico: Date serialization no pending handler</div>
++      <div class="porque">Quando o bot perguntava categoria ou pagamento, o parsed.date virava string no Supabase JSON. Na hora de registrar, .toISOString() quebrava. Agora o handler reconstroi o Date antes de processar.</div>
+     </div>
+     <div class="card">
+-      <div class="pergunta">15 consultas em linguagem natural</div>
+-      <div class="porque">O bot entende: "quanto gastei esse mes", "quanto gastei com mercado", "quanto gastei ontem/hoje/essa semana", "qual meu saldo", "qual meu maior gasto", "me mostra os ultimos 5 gastos", "gastei mais com X ou Y", "qual meu gasto medio por dia", "quanto sobra pro resto do mes", "to no vermelho?", "como to no mes?" — entre outros.</div>
++      <div class="pergunta">Fix: Prioridade do pending no router</div>
++      <div class="porque">A checagem de pending action estava em Priority 6 (depois de query, income, correction). Respostas como "Alimentacao" eram interceptadas por outros parsers. Movido pra Priority 2 — so undo passa por cima.</div>
+     </div>
+     <div class="card">
+-      <div class="pergunta">Mensagem matinal automatica (8h BRT)</div>
+-      <div class="porque">Todo dia as 8h, o bot manda um resumo: quanto gastou ontem, totais do mes, saldo atual, contas pendentes. Sem voce pedir nada.</div>
++      <div class="pergunta">Fix: Falso "acima da media"</div>
++      <div class="porque">O alerta de anomalia disparava com 1-2 transacoes na categoria. Agora exige minimo 5 transacoes anteriores e threshold de 2.5x (era 2x). Cafe de R$ 10 nao gera mais alerta falso.</div>
+     </div>
+     <div class="card">
+-      <div class="pergunta">Fechamento semanal (domingo 20h BRT)</div>
+-      <div class="porque">Resumo automatico todo domingo: total da semana, comparacao com semana anterior, itens mais caros, dia mais pesado.</div>
++      <div class="pergunta">Deduplicacao de mensagens</div>
++      <div class="porque">Se a mesma mensagem chega do mesmo numero em menos de 3 segundos, a segunda e ignorada. Protege contra double-send do WhatsApp e retries do Twilio.</div>
+     </div>
+     <div class="card">
+-      <div class="pergunta">Transcricao de audio via Whisper</div>
+-      <div class="porque">Manda audio no WhatsApp e o bot transcreve e processa. Confirma com "🎤 Ouvi: ..." antes de anotar. Precisa de OPENAI_API_KEY configurada no Vercel.</div>
++      <div class="pergunta">Error handling com contexto</div>
++      <div class="porque">O generico "Erro ao processar. Tenta de novo." foi substituido por mensagens que dizem o que aconteceu e o que mandar de novo.</div>
+     </div>
+     <div class="card">
+-      <div class="pergunta">Sistema de tom duplo (cria / neutro)</div>
+-      <div class="porque">Todas as respostas tem versao casual/carioca e versao polida/formal. Preparacao pra multi-usuario com preferencias diferentes.</div>
+-    </div>
+-    <div class="card">
+-      <div class="pergunta">Google Sheets Espelho funcionando</div>
+-      <div class="porque">Sincronia em tempo real confirmada. Cada transacao vai pra planilha automaticamente. Formatada com cabecalhos, cores e moeda.</div>
++      <div class="pergunta">tests/regression.md criado</div>
++      <div class="porque">6 casos de teste obrigatorios que precisam passar antes de qualquer deploy futuro. Se algum quebrar, nao sobe.</div>
+     </div>
+   </section>
+ 
+   <section>
+-    <div class="label">O que ta esperando voce testar</div>
++    <div class="label">Testes de regressao obrigatorios (testar agora)</div>
++
++    <div class="card">
++      <div class="pergunta">Caso 1: Registro simples</div>
++      <div class="porque">Manda "uber 22 pix". Deve voltar confirmacao com dados completos no formato novo (com emoji de check).</div>
++    </div>
+ 
+     <div class="card">
+-      <div class="pergunta">Mandar gastos variados e conferir as respostas ricas</div>
+-      <div class="porque">Manda "cafe 8 em alimentacao", "uber 25 em transporte", etc. Confere se volta a confirmacao + contexto da categoria + resumo do mes.</div>
++      <div class="pergunta">Caso 2: Pergunta de categoria + resposta</div>
++      <div class="porque">Manda "agua 5 pix". Bot pergunta categoria. Responde "alimentacao". Deve registrar sem erro.</div>
+     </div>
+ 
+     <div class="card">
+-      <div class="pergunta">Experimentar os 15 tipos de consulta</div>
+-      <div class="porque">Testa "quanto gastei esse mes", "qual meu saldo", "qual meu maior gasto", "to no vermelho?" e os outros. Veja se as respostas fazem sentido.</div>
++      <div class="pergunta">Caso 3: Pergunta de pagamento + resposta</div>
++      <div class="porque">Manda "agua 5". Bot pergunta categoria, depois pagamento. Responde cada um. Deve registrar sem erro.</div>
+     </div>
+ 
+     <div class="card">
+-      <div class="pergunta">Mandar um audio de voz</div>
+-      <div class="porque">Grava um audio no WhatsApp tipo "gastei vinte reais no almoco". O bot transcreve e anota. Precisa da OPENAI_API_KEY no Vercel pra funcionar.</div>
++      <div class="pergunta">Caso 4: Undo / Desfazer</div>
++      <div class="porque">Manda "apaga o ultimo". Deve confirmar o que apagou.</div>
+     </div>
+ 
+     <div class="card">
+-      <div class="pergunta">Esperar a mensagem matinal amanha as 8h</div>
+-      <div class="porque">Amanha de manha voce deve receber o resumo diario automatico. Se nao chegar, a gente investiga o cron.</div>
++      <div class="pergunta">Caso 5: Consulta resumo</div>
++      <div class="porque">Manda "quanto gastei esse mes". Deve voltar breakdown por categoria.</div>
+     </div>
+ 
+     <div class="card">
+-      <div class="pergunta">Esperar o fechamento semanal no domingo 20h</div>
+-      <div class="porque">No proximo domingo a noite, chega o resumo da semana automaticamente.</div>
++      <div class="pergunta">Caso 6: Audio (precisa OPENAI_API_KEY)</div>
++      <div class="porque">Manda audio de voz. Deve transcrever e anotar. Sem key, avisa que nao consegue ouvir.</div>
+     </div>
+   </section>
+ 
+@@ -324,24 +325,24 @@
+ 
+     <div class="card" style="padding: 22px 24px;">
+       <div class="barra-container">
+-        <div class="barra-label"><span>Bot WhatsApp / Conversacao</span><span>95%</span></div>
+-        <div class="barra"><div class="barra-fill green" style="width:95%"></div></div>
++        <div class="barra-label"><span>Bot WhatsApp / Conversacao</span><span>78%</span></div>
++        <div class="barra"><div class="barra-fill yellow" style="width:78%"></div></div>
+       </div>
+       <div class="barra-container">
+-        <div class="barra-label"><span>Relatorios e Insights</span><span>100%</span></div>
+-        <div class="barra"><div class="barra-fill green" style="width:100%"></div></div>
++        <div class="barra-label"><span>Relatorios e Insights</span><span>85%</span></div>
++        <div class="barra"><div class="barra-fill green" style="width:85%"></div></div>
+       </div>
+       <div class="barra-container">
+         <div class="barra-label"><span>Dashboard Web</span><span>92%</span></div>
+         <div class="barra"><div class="barra-fill green" style="width:92%"></div></div>
+       </div>
+       <div class="barra-container">
+-        <div class="barra-label"><span>Infraestrutura / Deploy</span><span>92%</span></div>
+-        <div class="barra"><div class="barra-fill green" style="width:92%"></div></div>
++        <div class="barra-label"><span>Infraestrutura / Deploy</span><span>80%</span></div>
++        <div class="barra"><div class="barra-fill yellow" style="width:80%"></div></div>
+       </div>
+       <div class="barra-container">
+-        <div class="barra-label"><span>Categorizacao Inteligente</span><span>85%</span></div>
+-        <div class="barra"><div class="barra-fill green" style="width:85%"></div></div>
++        <div class="barra-label"><span>Categorizacao Inteligente</span><span>75%</span></div>
++        <div class="barra"><div class="barra-fill yellow" style="width:75%"></div></div>
+       </div>
+       <div class="barra-container">
+         <div class="barra-label"><span>Banco de Dados / Persistencia</span><span>82%</span></div>
+@@ -369,8 +370,8 @@
+   <section>
+     <div class="label">O que vem a seguir</div>
+     <ol class="proximos">
+-      <li>Voce testa as respostas ricas, as 15 consultas e o audio.</li>
+-      <li>Confere a mensagem matinal amanha as 8h e o fechamento semanal no domingo.</li>
++      <li>Testar os 6 casos de regressao no WhatsApp agora.</li>
++      <li>Se todos passarem: features estao estaveis, seguir pra proximas prioridades.</li>
+       <li>Configura OPENAI_API_KEY no Vercel e muda planilha pra "Restrito".</li>
+       <li>Migracao pro WhatsApp oficial (Meta API) — sair do sandbox, ter numero proprio.</li>
+       <li>Escaneamento de fotos e recibos.</li>
+@@ -451,8 +452,8 @@
+   <section>
+     <div class="label">Saude geral</div>
+     <div class="saude">
+-      <div class="pct">67%</div>
+-      <div class="frase">Subiu 6 pontos (era 61%). O bot agora e um assistente de verdade: respostas ricas, 15 consultas naturais, audio, resumos automaticos, tom duplo, planilha sincronizando. A proxima subida grande vem com a migracao pra Meta API e o onboarding multi-usuario.</div>
++      <div class="pct">60%</div>
++      <div class="frase">Ajustado pra baixo (era 67%) pra refletir a realidade. Features existem mas precisaram de estabilizacao. Pendencias de categoria/pagamento, anomalias falsas e deduplicacao foram corrigidas nessa rodada. O foco agora e solidificar o que existe antes de adicionar features novas. Nenhum deploy sobe sem os 6 testes de regressao passando.</div>
+     </div>
+   </section>
+ 
+@@ -462,3 +463,4 @@
+ 
+ </body>
+ </html>
++                                                    
+\ No newline at end of file
+diff --git a/sql/create_debug_logs.sql b/sql/create_debug_logs.sql
+new file mode 100755
+index 0000000..183df3c
+--- /dev/null
++++ b/sql/create_debug_logs.sql
+@@ -0,0 +1,35 @@
++-- Caixinha: Create debug_logs table
++-- Run this in Supabase SQL Editor (https://supabase.com/dashboard → SQL Editor)
++
++CREATE TABLE IF NOT EXISTS debug_logs (
++  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
++  user_id UUID REFERENCES users(id),
++  timestamp TIMESTAMPTZ DEFAULT now(),
++  incoming_message TEXT NOT NULL,
++  detected_intent TEXT NOT NULL DEFAULT 'unknown',
++  pending_action_found TEXT,
++  handler_used TEXT NOT NULL DEFAULT 'none',
++  parsed_data JSONB,
++  response_sent TEXT NOT NULL DEFAULT '',
++  error TEXT,
++  processing_time_ms INTEGER DEFAULT 0
++);
++
++-- Index for fast lookups by timestamp (most common query)
++CREATE INDEX IF NOT EXISTS idx_debug_logs_timestamp ON debug_logs(timestamp DESC);
++
++-- Index for filtering by user
++CREATE INDEX IF NOT EXISTS idx_debug_logs_user ON debug_logs(user_id);
++
++-- Auto-cleanup: keep only last 7 days of logs
++-- (optional, run manually or set up a cron)
++-- DELETE FROM debug_logs WHERE timestamp < now() - interval '7 days';
++
++-- Grant access to service role (should already have it, but just in case)
++ALTER TABLE debug_logs ENABLE ROW LEVEL SECURITY;
++
++-- Policy: service role can do everything
++CREATE POLICY "Service role full access" ON debug_logs
++  FOR ALL
++  USING (true)
++  WITH CHECK (true);
+diff --git a/src/app/api/debug/route.ts b/src/app/api/debug/route.ts
+new file mode 100755
+index 0000000..5b1c303
+--- /dev/null
++++ b/src/app/api/debug/route.ts
+@@ -0,0 +1,20 @@
++import { NextResponse } from 'next/server';
++import { supabaseAdmin } from '@/lib/supabase';
++
++export async function GET() {
++  try {
++    const { data, error } = await supabaseAdmin
++      .from('debug_logs')
++      .select('*')
++      .order('timestamp', { ascending: false })
++      .limit(50);
++
++    if (error) {
++      return NextResponse.json({ error: error.message }, { status: 500 });
++    }
++
++    return NextResponse.json({ logs: data || [] });
++  } catch (err) {
++    return NextResponse.json({ error: 'Internal error' }, { status: 500 });
++  }
++}
+diff --git a/src/app/api/webhook/route.ts b/src/app/api/webhook/route.ts
+index e305a63..d598ab1 100644
+--- a/src/app/api/webhook/route.ts
++++ b/src/app/api/webhook/route.ts
+@@ -3,49 +3,67 @@ import { routeMessage } from '@/handlers';
+ import { isAudioMessage, processAudioMessage } from '@/lib/audio';
+ import { sendWhatsApp } from '@/lib/twilio';
+ 
++// Deduplication: ignore identical messages from same number within 3s
++const recentMessages = new Map<string, { body: string; ts: number }>();
++const DEDUP_WINDOW_MS = 3000;
++
++function isDuplicate(phone: string, body: string): boolean {
++  const now = Date.now();
++  const prev = recentMessages.get(phone);
++
++  // Clean old entries
++  if (recentMessages.size > 500) {
++    for (const [k, v] of recentMessages) {
++      if (now - v.ts > DEDUP_WINDOW_MS * 2) recentMessages.delete(k);
++    }
++  }
++
++  if (prev && prev.body === body && now - prev.ts < DEDUP_WINDOW_MS) {
++    return true;
++  }
++
++  recentMessages.set(phone, { body, ts: now });
++  return false;
++}
++
++const TWIML_EMPTY = '<?xml version="1.0" encoding="UTF-8"?><Response></Response>';
++const TWIML_HEADERS = { 'Content-Type': 'text/xml' };
++
+ export async function POST(req: NextRequest) {
+   try {
+     const formData = await req.formData();
+     const from = formData.get('From')?.toString() || '';
+ 
+-    if (!from) {
++    if (from === '') {
+       return NextResponse.json({ error: 'Missing params' }, { status: 400 });
+     }
+ 
+     let body = formData.get('Body')?.toString().trim() || '';
+     let audioTranscription: string | undefined;
+ 
+-    // Audio handling — try to transcribe before falling back to text
+     if (isAudioMessage(formData)) {
+       const result = await processAudioMessage(formData);
+       if (result) {
+         body = result.transcription;
+         audioTranscription = result.transcription;
+       } else {
+-        // No OpenAI key or transcription failed
+-        await sendWhatsApp(
+-          from,
+-          'Ainda não consigo ouvir áudios. Manda por texto.',
+-        );
+-        return new NextResponse(
+-          '<?xml version="1.0" encoding="UTF-8"?><Response></Response>',
+-          { headers: { 'Content-Type': 'text/xml' } },
+-        );
++        await sendWhatsApp(from, 'Ainda n\u00e3o consigo ouvir \u00e1udios. Manda por texto.');
++        return new NextResponse(TWIML_EMPTY, { headers: TWIML_HEADERS });
+       }
+     }
+ 
+-    if (!body) {
++    if (body === '') {
+       return NextResponse.json({ error: 'Missing params' }, { status: 400 });
+     }
+ 
+-    // Await processing — Vercel kills the function after response
++    if (isDuplicate(from, body)) {
++      console.log('Dedup: ignoring duplicate from', from);
++      return new NextResponse(TWIML_EMPTY, { headers: TWIML_HEADERS });
++    }
++
+     await routeMessage(from, body, audioTranscription);
+ 
+-    // TwiML empty response (Twilio expects this)
+-    return new NextResponse(
+-      '<?xml version="1.0" encoding="UTF-8"?><Response></Response>',
+-      { headers: { 'Content-Type': 'text/xml' } }
+-    );
++    return new NextResponse(TWIML_EMPTY, { headers: TWIML_HEADERS });
+   } catch (err) {
+     console.error('Webhook error:', err);
+     return NextResponse.json({ error: 'Internal error' }, { status: 500 });
+diff --git a/src/app/debug/page.tsx b/src/app/debug/page.tsx
+new file mode 100755
+index 0000000..ed28d77
+--- /dev/null
++++ b/src/app/debug/page.tsx
+@@ -0,0 +1,213 @@
++'use client';
++
++import { useEffect, useState } from 'react';
++
++interface LogEntry {
++  id: string;
++  user_id: string;
++  timestamp: string;
++  incoming_message: string;
++  detected_intent: string;
++  pending_action_found: string | null;
++  handler_used: string;
++  parsed_data: Record<string, any> | null;
++  response_sent: string;
++  error: string | null;
++  processing_time_ms: number;
++}
++
++export default function DebugPage() {
++  const [logs, setLogs] = useState<LogEntry[]>([]);
++  const [loading, setLoading] = useState(true);
++  const [error, setError] = useState<string | null>(null);
++  const [expandedId, setExpandedId] = useState<string | null>(null);
++  const [autoRefresh, setAutoRefresh] = useState(true);
++
++  const fetchLogs = async () => {
++    try {
++      const res = await fetch('/api/debug');
++      const data = await res.json();
++      if (data.error) {
++        setError(data.error);
++      } else {
++        setLogs(data.logs || []);
++        setError(null);
++      }
++    } catch (err) {
++      setError('Failed to fetch logs');
++    } finally {
++      setLoading(false);
++    }
++  };
++
++  useEffect(() => {
++    fetchLogs();
++    if (autoRefresh) {
++      const interval = setInterval(fetchLogs, 5000);
++      return () => clearInterval(interval);
++    }
++  }, [autoRefresh]);
++
++  const fmtTime = (ts: string) => {
++    const d = new Date(ts);
++    return d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
++  };
++
++  const fmtDate = (ts: string) => {
++    const d = new Date(ts);
++    return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
++  };
++
++  const intentColor = (intent: string) => {
++    if (intent.startsWith('query')) return '#8b5cf6';
++    if (intent === 'expense') return '#22c55e';
++    if (intent === 'income') return '#3b82f6';
++    if (intent === 'pending_response') return '#f59e0b';
++    if (intent === 'undo') return '#ef4444';
++    if (intent === 'fallback') return '#71717a';
++    return '#a1a1aa';
++  };
++
++  return (
++    <div style={{
++      background: '#0a0a0b', color: '#fafafa', minHeight: '100vh',
++      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif',
++      padding: '24px 16px',
++    }}>
++      <div style={{ maxWidth: 1200, margin: '0 auto' }}>
++        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
++          <div>
++            <h1 style={{ fontSize: 24, fontWeight: 700, margin: 0 }}>Caixinha Debug</h1>
++            <p style={{ color: '#71717a', fontSize: 13, margin: '4px 0 0' }}>
++              Caixa-preta — {logs.length} logs carregados
++            </p>
++          </div>
++          <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
++            <label style={{ color: '#a1a1aa', fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
++              <input
++                type="checkbox"
++                checked={autoRefresh}
++                onChange={(e) => setAutoRefresh(e.target.checked)}
++              />
++              Auto-refresh 5s
++            </label>
++            <button
++              onClick={fetchLogs}
++              style={{
++                background: '#27272a', border: '1px solid #3f3f46', color: '#fafafa',
++                padding: '6px 14px', borderRadius: 6, cursor: 'pointer', fontSize: 13,
++              }}
++            >
++              Refresh
++            </button>
++          </div>
++        </div>
++
++        {error && (
++          <div style={{
++            background: '#1c1017', border: '1px solid #7f1d1d', borderRadius: 8,
++            padding: '12px 16px', marginBottom: 16, color: '#fca5a5', fontSize: 14,
++          }}>
++            {error}
++          </div>
++        )}
++
++        {loading ? (
++          <p style={{ color: '#71717a' }}>Carregando...</p>
++        ) : logs.length === 0 ? (
++          <div style={{
++            background: '#141418', border: '1px solid #27272a', borderRadius: 8,
++            padding: '40px 20px', textAlign: 'center', color: '#71717a',
++          }}>
++            Nenhum log ainda. Manda uma mensagem no WhatsApp e atualiza.
++          </div>
++        ) : (
++          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
++            {logs.map((log) => (
++              <div
++                key={log.id}
++                onClick={() => setExpandedId(expandedId === log.id ? null : log.id)}
++                style={{
++                  background: log.error ? '#1c1017' : '#141418',
++                  border: `1px solid ${log.error ? '#7f1d1d' : '#27272a'}`,
++                  borderRadius: 8, padding: '14px 18px', cursor: 'pointer',
++                  transition: 'border-color 0.15s',
++                }}
++              >
++                {/* Header row */}
++                <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
++                  <span style={{ color: '#71717a', fontSize: 12, fontFamily: 'monospace', minWidth: 90 }}>
++                    {fmtDate(log.timestamp)} {fmtTime(log.timestamp)}
++                  </span>
++                  <span style={{
++                    background: intentColor(log.detected_intent) + '22',
++                    color: intentColor(log.detected_intent),
++                    padding: '2px 8px', borderRadius: 4, fontSize: 12, fontWeight: 600,
++                    fontFamily: 'monospace',
++                  }}>
++                    {log.detected_intent}
++                  </span>
++                  <span style={{ color: '#a1a1aa', fontSize: 12, fontFamily: 'monospace' }}>
++                    {log.handler_used}
++                  </span>
++                  <span style={{ color: '#71717a', fontSize: 11, fontFamily: 'monospace', marginLeft: 'auto' }}>
++                    {log.processing_time_ms}ms
++                  </span>
++                </div>
++
++                {/* Message */}
++                <div style={{ marginTop: 8 }}>
++                  <span style={{ color: '#22c55e', fontSize: 13, fontFamily: 'monospace' }}>IN: </span>
++                  <span style={{ color: '#fafafa', fontSize: 14 }}>{log.incoming_message}</span>
++                </div>
++                <div style={{ marginTop: 4 }}>
++                  <span style={{ color: '#3b82f6', fontSize: 13, fontFamily: 'monospace' }}>OUT: </span>
++                  <span style={{ color: '#a1a1aa', fontSize: 14 }}>
++                    {log.response_sent.length > 120
++                      ? log.response_sent.substring(0, 120) + '...'
++                      : log.response_sent}
++                  </span>
++                </div>
++
++                {log.error && (
++                  <div style={{ marginTop: 6, color: '#fca5a5', fontSize: 13, fontFamily: 'monospace' }}>
++                    ERROR: {log.error.substring(0, 200)}
++                  </div>
++                )}
++
++                {log.pending_action_found && (
++                  <div style={{ marginTop: 4, color: '#f59e0b', fontSize: 12, fontFamily: 'monospace' }}>
++                    PENDING: {log.pending_action_found}
++                  </div>
++                )}
++
++                {/* Expanded details */}
++                {expandedId === log.id && (
++                  <div style={{
++                    marginTop: 12, paddingTop: 12, borderTop: '1px solid #27272a',
++                  }}>
++                    <pre style={{
++                      background: '#0a0a0b', padding: 12, borderRadius: 6,
++                      fontSize: 12, fontFamily: 'monospace', color: '#a1a1aa',
++                      overflow: 'auto', maxHeight: 300, whiteSpace: 'pre-wrap',
++                    }}>
++{JSON.stringify({
++  user_id: log.user_id,
++  parsed_data: log.parsed_data,
++  pending_action_found: log.pending_action_found,
++  handler_used: log.handler_used,
++  processing_time_ms: log.processing_time_ms,
++  error: log.error,
++  response_sent_full: log.response_sent,
++}, null, 2)}
++                    </pre>
++                  </div>
++                )}
++              </div>
++            ))}
++          </div>
++        )}
++      </div>
++    </div>
++  );
++}
+diff --git a/src/handlers/index.ts b/src/handlers/index.ts
+index 84ba3124f9245c07511b97469e99eecda6962a97..b3d710d6a64811b690b19dc84be7aa8c2bc58bb4 100644
+GIT binary patch
+literal 8656
+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
+UYZWhlJa{z|zI374>NfZO4QL;i_W%F@
+
+delta 1254
+zcmc&zOK4L;6g9Q2`qVbHYE09lH?`F^q)A<<Q1M3*KZxBFT&URby-6~fHxp;xYfZzm
+zt^`F~cy*y0k&2>FDRiSQ4d|+%6hU42TeuQ+<<fac4aAk;!r9HazcY8vc{%)Z%j|Rm
+zzHPX9Fr9`2G+&@{2qq*cD3DYY1XmO$n3DtIT1-Ge(hNHX6FJJkk%TK#vVy||2d4a>
+zqTE5TbT;7OOyg`*+*MTKg{DnL`Ke8%0A8NP$4vuxt9f*Jj+$p6BjntV=7j(@uegGN
+zmQH-Kstbcgtbr*UFe3Xjs}Y_rg3B!dCgC8)sg%s3K%hXm#dsEoSz++;!gZiJT6A(g
+zO7lK-!W@;tSB>o$UA7EQ7$0yx7{c_b?zU?2vB4AlI}Gs8wU(%!Ucwi_C_Z1Es<DwR
+zhbvgNbyE#n89bn|q1t__ja70&4Xt=%O>YGcx1Yx^Yxig41tJx-QYLX|R><N>X7xj<
+zI#Z9;FC3Lca0J-IF>~N5pM9PZ$*FacIn-7_xCI$^a<W*>@e{@wsa}Q`+v3@EKk!nx
+z9iOd#-&5;ec^On0B<oRp7}~hH4#WA-Cw#Y|&l>9~Et0lq?TbCoTdxI(EnMz+DHtu^
+z0cz`ja<f^g9Q{&ii_^@jgE+CNw;TEtv(s7xqJIp%a5C}tgYZo_7A@b`rOB%D3PL(G
+z33)O}Wh#}@4I>?4+}i;-5pBVlj^RKYzjdr@^mmO$Xxp5K><I*GqTUIchh_Nze(#Ly
+zqL?n)iVM+Qi$A&^FUHp5>sWB*;?6c7(aQZAOGL`|NqGjgY)@)`nDi8bt%HML>A%qN
+z-Cfak;!6&+53Ifn$>&cI^9(-f+J~2$BKR4SQ|Uy)fCL<^Sd9E(GAE~XT`^j{x$11E
+zb8M;<$x^?OkSxo%)__)s6t=d-xL_s)E*zTD327ta@~T06TVphSXkhHy?W=cT#2sft
+k(A`t2o8@&M=f`<Z>Gz^Mych4C8rxxb#*+VbcK*}kUm?tMz5oCK
+
+diff --git a/src/handlers/pending.ts b/src/handlers/pending.ts
+index 6ed6846..ad3122c 100644
+--- a/src/handlers/pending.ts
++++ b/src/handlers/pending.ts
+@@ -3,9 +3,39 @@ import { sendWhatsApp } from '@/lib/twilio';
+ import { resolveCategory, suggestCategory, matchCategory } from '@/lib/categories';
+ import { PendingAction, ParsedMessage } from '@/types';
+ import { normalize } from '@/lib/formatter';
++import { monthLabel } from '@/lib/formatter';
+ import { handleExpense } from './expense';
+ import { v4 as uuidv4 } from 'uuid';
+ 
++/**
++ * Reconstruct Date objects and month_label after JSON deserialization.
++ * When ParsedMessage is stored in Supabase JSONB, Date objects become
++ * ISO strings. This function restores them so handleExpense works.
++ */
++function hydrateParsed(raw: any): ParsedMessage {
++  const parsed = { ...raw } as ParsedMessage;
++  parsed.date = parsed.date ? new Date(parsed.date as any) : new Date();
++  if (parsed.month_label === undefined || parsed.month_label === null) {
++    parsed.month_label = monthLabel(parsed.date);
++  }
++  return parsed;
++}
++
++const PAYMENT_KEYWORDS: Array<{ pattern: RegExp; method: string }> = [
++  { pattern: /cr[e\u00e9]dito|cartao|cart\u00e3o/, method: 'Cr\u00e9dito' },
++  { pattern: /d[e\u00e9]bito/, method: 'D\u00e9bito' },
++  { pattern: /pix/, method: 'Pix' },
++  { pattern: /dinheiro|cash|esp[e\u00e9]cie/, method: 'Dinheiro' },
++];
++
++function matchPaymentMethod(msg: string): string | null {
++  const low = msg.toLowerCase();
++  for (const { pattern, method } of PAYMENT_KEYWORDS) {
++    if (pattern.test(low)) return method;
++  }
++  return null;
++}
++
+ export async function handlePending(
+   userId: string,
+   phone: string,
+@@ -16,44 +46,48 @@ export async function handlePending(
+ 
+   try {
+     if (pending.type === 'category') {
+-      // Message is response to category suggestion
+-      const payload = pending.payload as { parsed: ParsedMessage; suggestedCategoryId?: string };
+-      const parsed = payload.parsed;
++      const payload = pending.payload as { parsed: any; suggestedCategoryId?: string };
++      const parsed = hydrateParsed(payload.parsed);
+ 
+-      // Check if user is confirming suggestion
+-      if (payload.suggestedCategoryId && /^(sim|s|isso|ok|tá|ta)$/.test(msgNorm)) {
+-        // Use suggested category
++      if (payload.suggestedCategoryId && /^(sim|s|isso|ok|t\u00e1|ta|yes|y)$/.test(msgNorm)) {
+         parsed.category_id = payload.suggestedCategoryId;
++      } else if (/^(n[\u00e3a]o|nao|n|nope)$/.test(msgNorm)) {
++        await supabaseAdmin.from('pending_actions').delete().eq('id', pending.id);
++        const newPending: PendingAction = {
++          id: uuidv4(),
++          user_id: userId,
++          type: 'category',
++          payload: { parsed },
++          expires_at: new Date(Date.now() + 10 * 60000).toISOString(),
++          created_at: new Date().toISOString(),
++        };
++        await supabaseAdmin.from('pending_actions').insert([newPending]);
++        return 'Beleza. Em qual categoria ent\u00e3o? (alimenta\u00e7\u00e3o, transporte, lazer...)';
+       } else {
+-        // Try to resolve category from message
+         const resolved = await resolveCategory(message, userId);
+         if (resolved) {
+           parsed.category_id = resolved.id;
+         } else {
+-          // Category not resolved, ask again
+           const suggested = await suggestCategory(parsed.description, userId);
++          await supabaseAdmin.from('pending_actions').delete().eq('id', pending.id);
+           const newPending: PendingAction = {
+             id: uuidv4(),
+             user_id: userId,
+             type: 'category',
+-            payload: {
+-              parsed,
+-              suggestedCategoryId: suggested?.id,
+-            },
++            payload: { parsed, suggestedCategoryId: suggested?.id },
+             expires_at: new Date(Date.now() + 10 * 60000).toISOString(),
+             created_at: new Date().toISOString(),
+           };
+           await supabaseAdmin.from('pending_actions').insert([newPending]);
+-
+           if (suggested) {
+-            return `Entendi. Tá em ${suggested.emoji} ${suggested.name}? (sim/não)`;
++            return `N\u00e3o achei essa categoria. T\u00e1 em ${suggested.emoji} ${suggested.name}? (sim/n\u00e3o)`;
+           }
+-          return 'Em qual categoria? (alimentação, transporte, lazer...)';
++          return 'N\u00e3o achei essa categoria. Qual \u00e9? (alimenta\u00e7\u00e3o, transporte, lazer...)';
+         }
+       }
+ 
+-      // Now check if we need payment method
+-      if (!parsed.payment_method) {
++      if (parsed.payment_method === null || parsed.payment_method === undefined) {
++        await supabaseAdmin.from('pending_actions').delete().eq('id', pending.id);
+         const newPending: PendingAction = {
+           id: uuidv4(),
+           user_id: userId,
+@@ -63,35 +97,20 @@ export async function handlePending(
+           created_at: new Date().toISOString(),
+         };
+         await supabaseAdmin.from('pending_actions').insert([newPending]);
+-
+-        await supabaseAdmin.from('pending_actions').delete().eq('id', pending.id);
+-
+-        return 'Crédito, pix ou dinheiro?';
++        return 'Cr\u00e9dito, pix ou dinheiro?';
+       }
+ 
+-      // Complete the expense
+-      const response = await handleExpense(userId, parsed, phone);
+-
+-      // Delete pending action
+       await supabaseAdmin.from('pending_actions').delete().eq('id', pending.id);
+-
+-      return response;
++      return await handleExpense(userId, parsed, phone);
+     }
+ 
+     if (pending.type === 'payment_method') {
+-      // Message is response to payment method question
+-      const payload = pending.payload as { parsed: ParsedMessage };
+-      const parsed = payload.parsed;
++      const payload = pending.payload as { parsed: any };
++      const parsed = hydrateParsed(payload.parsed);
+ 
+-      const msgLow = message.toLowerCase();
+-      if (msgLow.includes('credito') || msgLow.includes('crédito')) {
+-        parsed.payment_method = 'Crédito';
+-      } else if (msgLow.includes('pix')) {
+-        parsed.payment_method = 'Pix';
+-      } else if (msgLow.includes('dinheiro') || msgLow.includes('cash') || msgLow.includes('especie')) {
+-        parsed.payment_method = 'Dinheiro';
+-      } else {
+-        // Invalid payment method, ask again
++      const method = matchPaymentMethod(message);
++      if (method === null) {
++        await supabaseAdmin.from('pending_actions').delete().eq('id', pending.id);
+         const newPending: PendingAction = {
+           id: uuidv4(),
+           user_id: userId,
+@@ -101,24 +120,19 @@ export async function handlePending(
+           created_at: new Date().toISOString(),
+         };
+         await supabaseAdmin.from('pending_actions').insert([newPending]);
+-
+-        await supabaseAdmin.from('pending_actions').delete().eq('id', pending.id);
+-
+-        return 'Crédito, pix ou dinheiro?';
++        return 'N\u00e3o entendi. Cr\u00e9dito, d\u00e9bito, pix ou dinheiro?';
+       }
+ 
+-      // Complete the expense
+-      const response = await handleExpense(userId, parsed, phone);
+-
+-      // Delete pending action
++      parsed.payment_method = method;
+       await supabaseAdmin.from('pending_actions').delete().eq('id', pending.id);
+-
+-      return response;
++      return await handleExpense(userId, parsed, phone);
+     }
+ 
+-    return 'Pending action inválido.';
++    await supabaseAdmin.from('pending_actions').delete().eq('id', pending.id);
++    return 'Algo deu errado. Manda o gasto de novo do in\u00edcio.';
+   } catch (e) {
+     console.error('Pending action error:', e);
+     await supabaseAdmin.from('pending_actions').delete().eq('id', pending.id);
+-    return 'Erro ao processar. Tenta de novo.';
+-  }
+\ No newline at end of file
++    return 'Deu ruim ao registrar. Manda o gasto de novo do in\u00edcio.';
++  }
++}
+diff --git a/src/lib/anomaly.ts b/src/lib/anomaly.ts
+index 4048cb3..dc2759b 100644
+--- a/src/lib/anomaly.ts
++++ b/src/lib/anomaly.ts
+@@ -5,19 +5,15 @@ import { Transaction } from '@/types';
+ 
+ export async function checkAnomalies(userId: string, transaction: Transaction): Promise<string | null> {
+   try {
+-    // 1. Check amount > 2x category average (last 30 days)
+     const alert = await checkHighAmount(userId, transaction);
+     if (alert) return alert;
+ 
+-    // 2. Check category accumulated > user-defined limit
+     const limitAlert = await checkCategoryLimit(userId, transaction);
+     if (limitAlert) return limitAlert;
+ 
+-    // 3. Check frequency (>5 in same category in 24h)
+     const frequencyAlert = await checkFrequency(userId, transaction);
+     if (frequencyAlert) return frequencyAlert;
+ 
+-    // 4. Check pace (current month > 30% above same period last month)
+     const paceAlert = await checkPace(userId, transaction);
+     if (paceAlert) return paceAlert;
+ 
+@@ -31,7 +27,6 @@ export async function checkAnomalies(userId: string, transaction: Transaction):
+ async function checkHighAmount(userId: string, transaction: Transaction): Promise<string | null> {
+   if (!transaction.category_id) return null;
+ 
+-  // Get last 30 days of transactions in same category (excluding current)
+   const thirtyDaysAgo = new Date(Date.now() - 30 * 86400000);
+   const { data: categoryTxs } = await supabaseAdmin
+     .from('transactions')
+@@ -41,17 +36,16 @@ async function checkHighAmount(userId: string, transaction: Transaction): Promis
+     .eq('category_id', transaction.category_id)
+     .gte('date', thirtyDaysAgo.toISOString());
+ 
+-  // Exclude the transaction we just inserted from the average calculation
++  // Exclude the transaction we just inserted
+   const previous = (categoryTxs || []).filter((tx) => tx.id !== transaction.id);
+ 
+   // Need at least 5 previous transactions for a meaningful average
+   if (previous.length < 5) return null;
+ 
+   const avg = previous.reduce((sum, tx) => sum + tx.amount, 0) / previous.length;
+-  const threshold = avg * 2.5; // 2.5x instead of 2x to reduce false positives
++  const threshold = avg * 2.5;
+ 
+   if (transaction.amount > threshold) {
+-    // Get category info for emoji
+     const { data: cat } = await supabaseAdmin
+       .from('categories')
+       .select('name, emoji')
+@@ -74,19 +68,17 @@ async function checkHighAmount(userId: string, transaction: Transaction): Promis
+ async function checkCategoryLimit(userId: string, transaction: Transaction): Promise<string | null> {
+   if (!transaction.category_id) return null;
+ 
+-  // Get user config for category limit
+   const { data: config } = await supabaseAdmin
+     .from('config')
+     .select('value')
+     .eq('user_id', userId)
+-    .eq('key', `category_limit_${transaction.category_id}`)
++    .eq('key', 'category_limit_' + transaction.category_id)
+     .single();
+ 
+   if (!config || !config.value?.limit) return null;
+ 
+   const limit = config.value.limit;
+ 
+-  // Get current month accumulated for this category
+   const now = new Date();
+   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+   const { data: monthTxs } = await supabaseAdmin
+@@ -101,7 +93,6 @@ async function checkCategoryLimit(userId: string, transaction: Transaction): Pro
+   const totalWithNew = (monthTxs || []).reduce((sum, tx) => sum + tx.amount, 0) + transaction.amount;
+ 
+   if (totalWithNew > limit) {
+-    // Get category info
+     const { data: cat } = await supabaseAdmin
+       .from('categories')
+       .select('name, emoji')
+@@ -124,7 +115,6 @@ async function checkCategoryLimit(userId: string, transaction: Transaction): Pro
+ async function checkFrequency(userId: string, transaction: Transaction): Promise<string | null> {
+   if (!transaction.category_id) return null;
+ 
+-  // Count transactions in this category in last 24h (after adding current one)
+   const oneDayAgo = new Date(Date.now() - 24 * 86400000);
+   const { data: recentTxs } = await supabaseAdmin
+     .from('transactions')
+@@ -134,10 +124,9 @@ async function checkFrequency(userId: string, transaction: Transaction): Promise
+     .eq('category_id', transaction.category_id)
+     .gte('date', oneDayAgo.toISOString());
+ 
+-  const count = (recentTxs || []).length + 1; // +1 for current transaction
++  const count = (recentTxs || []).length + 1;
+ 
+   if (count > 5) {
+-    // Get category info
+     const { data: cat } = await supabaseAdmin
+       .from('categories')
+       .select('name, emoji')
+@@ -161,7 +150,6 @@ async function checkPace(userId: string, transaction: Transaction): Promise<stri
+   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+   const dayOfMonth = now.getDate();
+ 
+-  // Get current month accumulated (including this transaction)
+   const { data: monthTxs } = await supabaseAdmin
+     .from('transactions')
+     .select('amount')
+@@ -172,7 +160,6 @@ async function checkPace(userId: string, transaction: Transaction): Promise<stri
+ 
+   const currentMonthTotal = (monthTxs || []).reduce((sum, tx) => sum + tx.amount, 0) + transaction.amount;
+ 
+-  // Get same period last month
+   const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+   const lastMonthLabel = monthLabel(new Date(now.getFullYear(), now.getMonth() - 1, 1));
+   const { data: lastMonthTxs } = await supabaseAdmin
+@@ -183,7 +170,6 @@ async function checkPace(userId: string, transaction: Transaction): Promise<stri
+     .eq('month_label', lastMonthLabel)
+     .gte('date', lastMonthStart.toISOString());
+ 
+-  // Compare same day period of last month
+   const sameDataLastMonth = (lastMonthTxs || [])
+     .filter((tx) => {
+       const txDate = new Date(tx.date || '');
+@@ -193,6 +179,18 @@ async function checkPace(userId: string, transaction: Transaction): Promise<stri
+ 
+   if (sameDataLastMonth === 0) return null;
+ 
+-  // Project the month
+-  const projectedMonth = (currentMonthTotal / dayOfMonth) * 30; // assuming 30 days
+-  const threshol
+\ No newline at end of file
++  const projectedMonth = (currentMonthTotal / dayOfMonth) * 30;
++  const threshold = sameDataLastMonth * 1.3;
++
++  if (projectedMonth > threshold) {
++    const alertData: AnomalyAlertData = {
++      type: 'pace',
++      projectedMonth,
++      monthBudget: sameDataLastMonth,
++    };
++
++    return buildAnomalyAlert(alertData);
++  }
++
++  return null;
++}
+diff --git a/src/lib/debug-log.ts b/src/lib/debug-log.ts
+new file mode 100755
+index 0000000..631904a
+--- /dev/null
++++ b/src/lib/debug-log.ts
+@@ -0,0 +1,66 @@
++import { supabaseAdmin } from './supabase';
++
++export interface DebugLogEntry {
++  user_id: string;
++  incoming_message: string;
++  detected_intent: string;
++  pending_action_found: string | null;
++  handler_used: string;
++  parsed_data: Record<string, any> | null;
++  response_sent: string;
++  error: string | null;
++  processing_time_ms: number;
++}
++
++/**
++ * Writes a debug log entry to the debug_logs table.
++ * Never throws — logging failures are silently caught.
++ */
++export async function writeDebugLog(entry: DebugLogEntry): Promise<void> {
++  try {
++    await supabaseAdmin.from('debug_logs').insert([{
++      ...entry,
++      timestamp: new Date().toISOString(),
++    }]);
++  } catch (err) {
++    console.error('Debug log write failed:', err);
++  }
++}
++
++/**
++ * Helper to create a log context that collects data as the request is processed.
++ */
++export function createDebugContext(userId: string, incomingMessage: string) {
++  const startTime = Date.now();
++  const ctx: DebugLogEntry = {
++    user_id: userId,
++    incoming_message: incomingMessage,
++    detected_intent: 'unknown',
++    pending_action_found: null,
++    handler_used: 'none',
++    parsed_data: null,
++    response_sent: '',
++    error: null,
++    processing_time_ms: 0,
++  };
++
++  return {
++    /** Set the detected intent */
++    setIntent(intent: string) { ctx.detected_intent = intent; },
++    /** Set pending action info */
++    setPending(info: string) { ctx.pending_action_found = info; },
++    /** Set which handler processed the message */
++    setHandler(handler: string) { ctx.handler_used = handler; },
++    /** Set parsed data */
++    setParsed(data: Record<string, any>) { ctx.parsed_data = data; },
++    /** Set the response that was sent */
++    setResponse(response: string) { ctx.response_sent = response; },
++    /** Set error info */
++    setError(error: string) { ctx.error = error; },
++    /** Flush the log to the database */
++    async flush() {
++      ctx.processing_time_ms = Date.now() - startTime;
++      await writeDebugLog(ctx);
++    },
++  };
++}
+diff --git a/tests/regression.md b/tests/regression.md
+new file mode 100755
+index 0000000..d3593ab
+--- /dev/null
++++ b/tests/regression.md
+@@ -0,0 +1,85 @@
++# CAIXINHA — Testes de Regressão Obrigatórios
++
++> Nenhum deploy sobe sem todos esses casos passando.
++> Testar no WhatsApp real antes de considerar pronto.
++
++---
++
++## Caso 1: Registro simples com categoria e pagamento
++
++**Entrada:** `uber 22 pix`
++**Saída esperada:** Confirmação com dados (descrição, valor, categoria, forma de pagamento)
++**Formato:** `✅ Anotado, [nome]. uber, R$ 22,00 em transporte 🚗. Pix. Hoje.`
++**Última correção:** 2026-04-16
++
++---
++
++## Caso 2: Pergunta de categoria + resposta
++
++**Entrada 1:** `agua 5 pix`
++**Saída 1:** Pergunta de categoria (ex: `Água de 5. Em qual categoria?`)
++**Entrada 2:** `alimentacao` (ou `alimentação`)
++**Saída 2:** Confirmação com dados completos OU pergunta de pagamento se pagamento não veio na mensagem original
++**NUNCA:** `Erro ao processar. Tenta de novo.`
++**Bug original:** Date serialization — parsed.date vira string ao salvar no Supabase JSONB, quebrando .toISOString()
++**Última correção:** 2026-04-16
++
++---
++
++## Caso 3: Pergunta de pagamento + resposta
++
++**Entrada 1:** `agua 5` (sem forma de pagamento)
++**Saída 1:** Pergunta de categoria (se categoria não foi auto-detectada) ou pergunta de pagamento
++**Entrada N:** `pix`
++**Saída N:** Confirmação com dados completos
++**NUNCA:** `Erro ao processar. Tenta de novo.`
++**Bug original:** Mesmo bug de Date serialization do Caso 2
++**Última correção:** 2026-04-16
++
++---
++
++## Caso 4: Undo / Desfazer
++
++**Entrada:** `apaga o ultimo` (ou `desfaz`, `cancela`)
++**Saída esperada:** Confirmação do que foi apagado com descrição e valor
++**NUNCA:** Apagar sem confirmar qual transação
++**Última correção:** 2026-04-16
++
++---
++
++## Caso 5: Consulta resumo mensal
++
++**Entrada:** `quanto gastei esse mes` (ou `resumo`, `como tô`)
++**Saída esperada:** Breakdown por categoria com emojis, totais, saldo
++**Formato:** Categorias listadas com emoji, nome, valor e contagem
++**Última correção:** 2026-04-16
++
++---
++
++## Caso 6: Áudio (quando OPENAI_API_KEY estiver configurada)
++
++**Entrada:** Áudio de voz dizendo "café dez reais pix"
++**Saída esperada:** `🎤 Ouvi: "café dez reais pix"` + confirmação com dados
++**Sem OPENAI_API_KEY:** `Ainda não consigo ouvir áudios. Manda por texto.`
++**Última correção:** 2026-04-16 (implementado, aguardando key)
++
++---
++
++## Regras gerais que nunca podem quebrar
++
++1. **"Erro ao processar. Tenta de novo." genérico é proibido.** Se falhou, dar contexto útil.
++2. **"acima da média" só aparece com 5+ transações anteriores na categoria E valor 2.5x acima da média real.**
++3. **Mensagens duplicadas (mesma mensagem, mesmo número, <3s) são ignoradas.**
++4. **Pending actions expiram em 10 minutos, não 5.**
++5. **Pending action tem prioridade 2 no router (só undo passa por cima).**
++6. **Date objects são reconstituídos após deserialização do Supabase JSONB.**
++
++---
++
++## Como testar
++
++1. Abrir WhatsApp, conversa com o bot Twilio
++2. Testar cada caso na ordem
++3. Verificar se a saída corresponde ao esperado
++4. Se qualquer caso falhar, NÃO fazer deploy
++5. Documentar a falha e a data aqui antes de corrigir
+-- 
+2.34.1
+

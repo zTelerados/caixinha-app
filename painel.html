@@ -233,75 +233,76 @@
 
   <header>
     <h1>Caixinha — Painel</h1>
-    <div class="sub">Atualizado em 16 de abril de 2026 — 00h00</div>
+    <div class="sub">Atualizado em 16 de abril de 2026 — 15h30</div>
   </header>
 
   <section>
     <div class="label">Onde estamos agora</div>
-    <div class="fase-titulo">🚀 De bot basico a assistente de verdade</div>
+    <div class="fase-titulo">🔧 Estabilidade primeiro — corrigindo regressoes</div>
     <div class="analogia">
-      O Caixinha deixou de ser um anotador e virou um assistente financeiro completo. Agora ele responde com contexto rico (confirmacao + historico da categoria + resumo do mes), entende 15 tipos de pergunta em linguagem natural, transcreve audio, manda resumo automatico todo dia de manha e fechamento semanal no domingo. Tudo com dois tons de voz (cria e neutro) prontos pra quando tiver mais de um usuario. A planilha Espelho continua sincronizando em tempo real. O bot saiu de 61% pra <span style="color:var(--text)">67% de progresso geral</span>.
+      Rodada focada em estabilidade, nao features. Identificamos que o sistema de pendencias (perguntar categoria / pagamento e esperar resposta) tava quebrando porque o JavaScript Date vira string quando salva no Supabase JSON e ninguem reconstituia. Agora o pending handler reconstroi Dates, tem deduplicacao de mensagens, error handling com contexto, e existe um <span style="color:var(--text)">tests/regression.md</span> com 6 casos obrigatorios que precisam passar antes de qualquer deploy. O "acima da media" falso tambem foi blindado (minimo 5 transacoes). Progresso geral caiu de 67% pra <span style="color:var(--text)">60%</span> pra refletir a realidade — algumas coisas que pareciam prontas precisaram de retrabalho.
     </div>
   </section>
 
   <section>
-    <div class="label">O que entrou nessa rodada</div>
+    <div class="label">O que entrou nessa rodada (estabilidade)</div>
     <div class="card">
-      <div class="pergunta">Respostas ricas e estruturadas</div>
-      <div class="porque">Cada registro de gasto ou entrada agora volta com 3 camadas: confirmacao com todos os detalhes, contexto da categoria (ultimos 3-5 itens + subtotal), e resumo mensal com saldo. Link pro dashboard no final.</div>
+      <div class="pergunta">Fix critico: Date serialization no pending handler</div>
+      <div class="porque">Quando o bot perguntava categoria ou pagamento, o parsed.date virava string no Supabase JSON. Na hora de registrar, .toISOString() quebrava. Agora o handler reconstroi o Date antes de processar.</div>
     </div>
     <div class="card">
-      <div class="pergunta">15 consultas em linguagem natural</div>
-      <div class="porque">O bot entende: "quanto gastei esse mes", "quanto gastei com mercado", "quanto gastei ontem/hoje/essa semana", "qual meu saldo", "qual meu maior gasto", "me mostra os ultimos 5 gastos", "gastei mais com X ou Y", "qual meu gasto medio por dia", "quanto sobra pro resto do mes", "to no vermelho?", "como to no mes?" — entre outros.</div>
+      <div class="pergunta">Fix: Prioridade do pending no router</div>
+      <div class="porque">A checagem de pending action estava em Priority 6 (depois de query, income, correction). Respostas como "Alimentacao" eram interceptadas por outros parsers. Movido pra Priority 2 — so undo passa por cima.</div>
     </div>
     <div class="card">
-      <div class="pergunta">Mensagem matinal automatica (8h BRT)</div>
-      <div class="porque">Todo dia as 8h, o bot manda um resumo: quanto gastou ontem, totais do mes, saldo atual, contas pendentes. Sem voce pedir nada.</div>
+      <div class="pergunta">Fix: Falso "acima da media"</div>
+      <div class="porque">O alerta de anomalia disparava com 1-2 transacoes na categoria. Agora exige minimo 5 transacoes anteriores e threshold de 2.5x (era 2x). Cafe de R$ 10 nao gera mais alerta falso.</div>
     </div>
     <div class="card">
-      <div class="pergunta">Fechamento semanal (domingo 20h BRT)</div>
-      <div class="porque">Resumo automatico todo domingo: total da semana, comparacao com semana anterior, itens mais caros, dia mais pesado.</div>
+      <div class="pergunta">Deduplicacao de mensagens</div>
+      <div class="porque">Se a mesma mensagem chega do mesmo numero em menos de 3 segundos, a segunda e ignorada. Protege contra double-send do WhatsApp e retries do Twilio.</div>
     </div>
     <div class="card">
-      <div class="pergunta">Transcricao de audio via Whisper</div>
-      <div class="porque">Manda audio no WhatsApp e o bot transcreve e processa. Confirma com "🎤 Ouvi: ..." antes de anotar. Precisa de OPENAI_API_KEY configurada no Vercel.</div>
+      <div class="pergunta">Error handling com contexto</div>
+      <div class="porque">O generico "Erro ao processar. Tenta de novo." foi substituido por mensagens que dizem o que aconteceu e o que mandar de novo.</div>
     </div>
     <div class="card">
-      <div class="pergunta">Sistema de tom duplo (cria / neutro)</div>
-      <div class="porque">Todas as respostas tem versao casual/carioca e versao polida/formal. Preparacao pra multi-usuario com preferencias diferentes.</div>
-    </div>
-    <div class="card">
-      <div class="pergunta">Google Sheets Espelho funcionando</div>
-      <div class="porque">Sincronia em tempo real confirmada. Cada transacao vai pra planilha automaticamente. Formatada com cabecalhos, cores e moeda.</div>
+      <div class="pergunta">tests/regression.md criado</div>
+      <div class="porque">6 casos de teste obrigatorios que precisam passar antes de qualquer deploy futuro. Se algum quebrar, nao sobe.</div>
     </div>
   </section>
 
   <section>
-    <div class="label">O que ta esperando voce testar</div>
+    <div class="label">Testes de regressao obrigatorios (testar agora)</div>
 
     <div class="card">
-      <div class="pergunta">Mandar gastos variados e conferir as respostas ricas</div>
-      <div class="porque">Manda "cafe 8 em alimentacao", "uber 25 em transporte", etc. Confere se volta a confirmacao + contexto da categoria + resumo do mes.</div>
+      <div class="pergunta">Caso 1: Registro simples</div>
+      <div class="porque">Manda "uber 22 pix". Deve voltar confirmacao com dados completos no formato novo (com emoji de check).</div>
     </div>
 
     <div class="card">
-      <div class="pergunta">Experimentar os 15 tipos de consulta</div>
-      <div class="porque">Testa "quanto gastei esse mes", "qual meu saldo", "qual meu maior gasto", "to no vermelho?" e os outros. Veja se as respostas fazem sentido.</div>
+      <div class="pergunta">Caso 2: Pergunta de categoria + resposta</div>
+      <div class="porque">Manda "agua 5 pix". Bot pergunta categoria. Responde "alimentacao". Deve registrar sem erro.</div>
     </div>
 
     <div class="card">
-      <div class="pergunta">Mandar um audio de voz</div>
-      <div class="porque">Grava um audio no WhatsApp tipo "gastei vinte reais no almoco". O bot transcreve e anota. Precisa da OPENAI_API_KEY no Vercel pra funcionar.</div>
+      <div class="pergunta">Caso 3: Pergunta de pagamento + resposta</div>
+      <div class="porque">Manda "agua 5". Bot pergunta categoria, depois pagamento. Responde cada um. Deve registrar sem erro.</div>
     </div>
 
     <div class="card">
-      <div class="pergunta">Esperar a mensagem matinal amanha as 8h</div>
-      <div class="porque">Amanha de manha voce deve receber o resumo diario automatico. Se nao chegar, a gente investiga o cron.</div>
+      <div class="pergunta">Caso 4: Undo / Desfazer</div>
+      <div class="porque">Manda "apaga o ultimo". Deve confirmar o que apagou.</div>
     </div>
 
     <div class="card">
-      <div class="pergunta">Esperar o fechamento semanal no domingo 20h</div>
-      <div class="porque">No proximo domingo a noite, chega o resumo da semana automaticamente.</div>
+      <div class="pergunta">Caso 5: Consulta resumo</div>
+      <div class="porque">Manda "quanto gastei esse mes". Deve voltar breakdown por categoria.</div>
+    </div>
+
+    <div class="card">
+      <div class="pergunta">Caso 6: Audio (precisa OPENAI_API_KEY)</div>
+      <div class="porque">Manda audio de voz. Deve transcrever e anotar. Sem key, avisa que nao consegue ouvir.</div>
     </div>
   </section>
 
@@ -324,24 +325,24 @@
 
     <div class="card" style="padding: 22px 24px;">
       <div class="barra-container">
-        <div class="barra-label"><span>Bot WhatsApp / Conversacao</span><span>95%</span></div>
-        <div class="barra"><div class="barra-fill green" style="width:95%"></div></div>
+        <div class="barra-label"><span>Bot WhatsApp / Conversacao</span><span>78%</span></div>
+        <div class="barra"><div class="barra-fill yellow" style="width:78%"></div></div>
       </div>
       <div class="barra-container">
-        <div class="barra-label"><span>Relatorios e Insights</span><span>100%</span></div>
-        <div class="barra"><div class="barra-fill green" style="width:100%"></div></div>
+        <div class="barra-label"><span>Relatorios e Insights</span><span>85%</span></div>
+        <div class="barra"><div class="barra-fill green" style="width:85%"></div></div>
       </div>
       <div class="barra-container">
         <div class="barra-label"><span>Dashboard Web</span><span>92%</span></div>
         <div class="barra"><div class="barra-fill green" style="width:92%"></div></div>
       </div>
       <div class="barra-container">
-        <div class="barra-label"><span>Infraestrutura / Deploy</span><span>92%</span></div>
-        <div class="barra"><div class="barra-fill green" style="width:92%"></div></div>
+        <div class="barra-label"><span>Infraestrutura / Deploy</span><span>80%</span></div>
+        <div class="barra"><div class="barra-fill yellow" style="width:80%"></div></div>
       </div>
       <div class="barra-container">
-        <div class="barra-label"><span>Categorizacao Inteligente</span><span>85%</span></div>
-        <div class="barra"><div class="barra-fill green" style="width:85%"></div></div>
+        <div class="barra-label"><span>Categorizacao Inteligente</span><span>75%</span></div>
+        <div class="barra"><div class="barra-fill yellow" style="width:75%"></div></div>
       </div>
       <div class="barra-container">
         <div class="barra-label"><span>Banco de Dados / Persistencia</span><span>82%</span></div>
@@ -369,8 +370,8 @@
   <section>
     <div class="label">O que vem a seguir</div>
     <ol class="proximos">
-      <li>Voce testa as respostas ricas, as 15 consultas e o audio.</li>
-      <li>Confere a mensagem matinal amanha as 8h e o fechamento semanal no domingo.</li>
+      <li>Testar os 6 casos de regressao no WhatsApp agora.</li>
+      <li>Se todos passarem: features estao estaveis, seguir pra proximas prioridades.</li>
       <li>Configura OPENAI_API_KEY no Vercel e muda planilha pra "Restrito".</li>
       <li>Migracao pro WhatsApp oficial (Meta API) — sair do sandbox, ter numero proprio.</li>
       <li>Escaneamento de fotos e recibos.</li>
@@ -451,8 +452,8 @@
   <section>
     <div class="label">Saude geral</div>
     <div class="saude">
-      <div class="pct">67%</div>
-      <div class="frase">Subiu 6 pontos (era 61%). O bot agora e um assistente de verdade: respostas ricas, 15 consultas naturais, audio, resumos automaticos, tom duplo, planilha sincronizando. A proxima subida grande vem com a migracao pra Meta API e o onboarding multi-usuario.</div>
+      <div class="pct">60%</div>
+      <div class="frase">Ajustado pra baixo (era 67%) pra refletir a realidade. Features existem mas precisaram de estabilizacao. Pendencias de categoria/pagamento, anomalias falsas e deduplicacao foram corrigidas nessa rodada. O foco agora e solidificar o que existe antes de adicionar features novas. Nenhum deploy sobe sem os 6 testes de regressao passando.</div>
     </div>
   </section>
 
