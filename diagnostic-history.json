@@ -304,5 +304,23 @@
       "Multi-usuario (preparacao)": 0,
       "Integracao WhatsApp Oficial": 0
     }
+  },
+  {
+    "date": "16 de abril de 2026",
+    "timestamp": "2026-04-16T17:40:53.156Z",
+    "overall": 61,
+    "commit": "d765e8b",
+    "modules": {
+      "Bot WhatsApp / Conversacao": 87,
+      "Categorizacao Inteligente": 85,
+      "Banco de Dados / Persistencia": 82,
+      "Dashboard Web": 92,
+      "Acesso Mobile (PWA)": 73,
+      "Relatorios e Insights": 100,
+      "Identidade Visual / Branding": 0,
+      "Infraestrutura / Deploy": 88,
+      "Multi-usuario (preparacao)": 0,
+      "Integracao WhatsApp Oficial": 0
+    }
   }
 ]

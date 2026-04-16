@@ -40,7 +40,7 @@ export async function handlePending(
               parsed,
               suggestedCategoryId: suggested?.id,
             },
-            expires_at: new Date(Date.now() + 5 * 60000).toISOString(),
+            expires_at: new Date(Date.now() + 10 * 60000).toISOString(),
             created_at: new Date().toISOString(),
           };
           await supabaseAdmin.from('pending_actions').insert([newPending]);
@@ -59,7 +59,7 @@ export async function handlePending(
           user_id: userId,
           type: 'payment_method',
           payload: { parsed },
-          expires_at: new Date(Date.now() + 5 * 60000).toISOString(),
+          expires_at: new Date(Date.now() + 10 * 60000).toISOString(),
           created_at: new Date().toISOString(),
         };
         await supabaseAdmin.from('pending_actions').insert([newPending]);
@@ -97,7 +97,7 @@ export async function handlePending(
           user_id: userId,
           type: 'payment_method',
           payload: { parsed },
-          expires_at: new Date(Date.now() + 5 * 60000).toISOString(),
+          expires_at: new Date(Date.now() + 10 * 60000).toISOString(),
           created_at: new Date().toISOString(),
         };
         await supabaseAdmin.from('pending_actions').insert([newPending]);
@@ -122,4 +122,3 @@ export async function handlePending(
     await supabaseAdmin.from('pending_actions').delete().eq('id', pending.id);
     return 'Erro ao processar. Tenta de novo.';
   }
-}

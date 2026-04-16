@@ -31,20 +31,24 @@ export async function checkAnomalies(userId: string, transaction: Transaction): 
 async function checkHighAmount(userId: string, transaction: Transaction): Promise<string | null> {
   if (!transaction.category_id) return null;
 
-  // Get last 30 days of transactions in same category
+  // Get last 30 days of transactions in same category (excluding current)
   const thirtyDaysAgo = new Date(Date.now() - 30 * 86400000);
   const { data: categoryTxs } = await supabaseAdmin
     .from('transactions')
-    .select('amount')
+    .select('amount, id')
     .eq('user_id', userId)
     .eq('type', 'expense')
     .eq('category_id', transaction.category_id)
     .gte('date', thirtyDaysAgo.toISOString());
 
-  if (!categoryTxs || categoryTxs.length === 0) return null;
+  // Exclude the transaction we just inserted from the average calculation
+  const previous = (categoryTxs || []).filter((tx) => tx.id !== transaction.id);
 
-  const avg = categoryTxs.reduce((sum, tx) => sum + tx.amount, 0) / categoryTxs.length;
-  const threshold = avg * 2;
+  // Need at least 5 previous transactions for a meaningful average
+  if (previous.length < 5) return null;
+
+  const avg = previous.reduce((sum, tx) => sum + tx.amount, 0) / previous.length;
+  const threshold = avg * 2.5; // 2.5x instead of 2x to reduce false positives
 
   if (transaction.amount > threshold) {
     // Get category info for emoji
@@ -191,17 +195,4 @@ async function checkPace(userId: string, transaction: Transaction): Promise<stri
 
   // Project the month
   const projectedMonth = (currentMonthTotal / dayOfMonth) * 30; // assuming 30 days
-  const threshold = sameDataLastMonth * 1.3; // 30% above
-
-  if (projectedMonth > threshold) {
-    const alertData: AnomalyAlertData = {
-      type: 'pace',
-      projectedMonth,
-      monthBudget: sameDataLastMonth,
-    };
-
-    return buildAnomalyAlert(alertData);
-  }
-
-  return null;
-}
+  const threshol
