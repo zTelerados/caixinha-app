@@ -5,6 +5,7 @@ import { learnItem, getCategories } from '@/lib/categories';
 import { checkAnomalies } from '@/lib/anomaly';
 import { syncTransactionInBackground } from '@/lib/sheets-sync';
 import { buildExpenseResponse, ExpenseResponseParams } from '@/lib/responses';
+import { displayPayment } from '@/lib/normalize';
 import { ParsedMessage, Transaction } from '@/types';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -144,7 +145,7 @@ export async function handleExpense(
     amount: parsed.amount,
     categoryName,
     categoryEmoji,
-    paymentMethod: parsed.payment_method || null,
+    paymentMethod: displayPayment(parsed.payment_method) || null,
     date: parsed.date,
     tone,
     categoryHistory,

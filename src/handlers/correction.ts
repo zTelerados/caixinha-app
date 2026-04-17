@@ -1,6 +1,7 @@
 import { supabaseAdmin } from '@/lib/supabase';
 import { resolveCategory, learnItem, unlearnItem, invalidateCache } from '@/lib/categories';
 import { fmtValor, friendlyName } from '@/lib/formatter';
+import { displayPayment } from '@/lib/normalize';
 import { ParsedCorrection, Transaction } from '@/types';
 
 export async function handleCorrection(
@@ -36,9 +37,12 @@ export async function handleCorrection(
   let updatedDesc = transaction.description;
   let updatedAmount = transaction.amount;
   let updatedCategoryId = transaction.category_id;
+  let updatedPayment = transaction.payment_method;
 
   // Apply correction
-  if (correction.type === 'amount' && correction.amount !== undefined) {
+  if (correction.type === 'payment' && correction.term) {
+    updatedPayment = correction.term; // already canonical from parser
+  } else if (correction.type === 'amount' && correction.amount !== undefined) {
     updatedAmount = correction.amount;
   } else if (correction.type === 'category' && correction.term) {
     const newCategory = await resolveCategory(correction.term, userId);
@@ -62,6 +66,7 @@ export async function handleCorrection(
     .update({
       amount: updatedAmount,
       category_id: updatedCategoryId,
+      payment_method: updatedPayment,
     })
     .eq('id', transaction_id);
 
@@ -82,7 +87,9 @@ export async function handleCorrection(
     },
   ]);
 
-  if (correction.type === 'amount') {
+  if (correction.type === 'payment') {
+    return `Corrigido. ${transaction.description} agora é ${displayPayment(updatedPayment)}.`;
+  } else if (correction.type === 'amount') {
     return `Corrigido. ${transaction.description} agora é ${fmtValor(updatedAmount)}.`;
   } else {
     const { data: cat } = await supabaseAdmin

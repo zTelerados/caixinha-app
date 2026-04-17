@@ -1,5 +1,5 @@
 import { supabaseAdmin } from '@/lib/supabase';
-import { normalize } from '@/lib/formatter';
+import { humanNormalize, canonicalPayment, displayPayment } from '@/lib/normalize';
 
 interface ConfigResult {
   matched: boolean;
@@ -11,7 +11,7 @@ export async function handleConfig(
   message: string,
 ): Promise<ConfigResult> {
   const msg = message.trim();
-  const low = normalize(msg);
+  const low = humanNormalize(msg);
 
   // Tone change
   const toneMatch = low.match(/(?:muda|troca|altera)\s+(?:meu\s+)?tom\s+(?:pra|para)\s+(neutro|cria)/);
@@ -48,7 +48,7 @@ export async function handleConfig(
   }
 
   // Month start day
-  const monthMatch = low.match(/(?:meu\s+)?m[e\u00ea]s\s+come[c\u00e7]a\s+(?:no\s+)?dia\s+(\d{1,2})/);
+  const monthMatch = low.match(/(?:meu\s+)?mes\s+comeca\s+(?:no\s+)?dia\s+(\d{1,2})/);
   if (monthMatch) {
     const day = parseInt(monthMatch[1], 10);
     if (day < 1 || day > 28) {
@@ -64,23 +64,17 @@ export async function handleConfig(
     };
   }
 
-  // Default payment
-  const payMatch = low.match(/pagamento\s+padr[a\u00e3]o\s+(?:[e\u00e9]\s+)?(credito|cr[e\u00e9]dito|pix|dinheiro|d[e\u00e9]bito|debito)/);
+  // Default payment — now stores canonical lowercase
+  const payMatch = low.match(/pagamento\s+padrao\s+(?:e\s+)?(credito|pix|dinheiro|debito|cartao|cash)/);
   if (payMatch) {
-    const raw = payMatch[1];
-    let method = 'Pix';
-    if (raw.includes('credito') || raw.includes('cr\u00e9dito')) method = 'Cr\u00e9dito';
-    else if (raw.includes('pix')) method = 'Pix';
-    else if (raw.includes('dinheiro')) method = 'Dinheiro';
-    else if (raw.includes('debito') || raw.includes('d\u00e9bito')) method = 'D\u00e9bito';
-
+    const canonical = canonicalPayment(payMatch[1]) || 'pix';
     await supabaseAdmin
       .from('users')
-      .update({ default_payment: method })
+      .update({ default_payment: canonical })
       .eq('id', userId);
     return {
       matched: true,
-      response: `Pagamento padr\u00e3o atualizado para ${method}.`,
+      response: `Pagamento padr\u00e3o atualizado para ${displayPayment(canonical)}.`,
     };
   }
 

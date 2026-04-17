@@ -60,10 +60,16 @@ const CATEGORY_COLORS = [
   '#6A0572', '#1D3557', '#40916C', '#7F5539',
   '#264653', '#E9C46A', '#F4A261', '#2A9D8F',
 ];
-const PAYMENT_METHODS = ['Pix', 'Crédito', 'Débito', 'Dinheiro'];
+const PAYMENT_METHODS = ['pix', 'credito', 'debito', 'dinheiro'];
+const PAYMENT_DISPLAY: Record<string, string> = { pix: 'Pix', credito: 'Crédito', debito: 'Débito', dinheiro: 'Dinheiro' };
 const EMPTY_FILTERS: Filters = { category: null, minValue: '', maxValue: '', startDate: '', endDate: '', search: '', paymentMethod: null };
 
 // ─── Helpers ──────────────────────────────────────────────
+function fmtPayment(pm: string | null): string {
+  if (!pm) return '';
+  return PAYMENT_DISPLAY[pm] || pm;
+}
+
 function fmtCurrency(value: number): string {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 }
@@ -212,7 +218,7 @@ function FilterBar({ filters, onFiltersChange, categories, activeCount, totalCou
             className="bg-caixa-bg border border-caixa-border rounded-lg px-3 py-2 text-sm text-caixa-text focus:outline-none focus:border-caixa-green/50"
           >
             <option value="">Forma de pgto</option>
-            {PAYMENT_METHODS.map((m) => <option key={m} value={m}>{m}</option>)}
+            {PAYMENT_METHODS.map((m) => <option key={m} value={m}>{PAYMENT_DISPLAY[m] || m}</option>)}
           </select>
           {/* Min/Max Value */}
           <input
@@ -331,7 +337,7 @@ function AddTransactionModal({ open, onClose, onAdd, categoriesList, currentMont
             {PAYMENT_METHODS.map((m) => (
               <button key={m} onClick={() => setPaymentMethod(paymentMethod === m ? '' : m)}
                 className={`py-2 text-xs rounded-lg border transition-colors ${paymentMethod === m ? 'border-caixa-green bg-caixa-green/10 text-caixa-green' : 'border-caixa-border text-caixa-muted hover:text-caixa-text'}`}
-              >{m}</button>
+              >{PAYMENT_DISPLAY[m] || m}</button>
             ))}
           </div>
         </div>
@@ -416,7 +422,7 @@ function EditTransactionModal({ transaction, onClose, onSave, categoriesList }: 
             {PAYMENT_METHODS.map((m) => (
               <button key={m} onClick={() => setPaymentMethod(paymentMethod === m ? '' : m)}
                 className={`py-2 text-xs rounded-lg border transition-colors ${paymentMethod === m ? 'border-caixa-green bg-caixa-green/10 text-caixa-green' : 'border-caixa-border text-caixa-muted hover:text-caixa-text'}`}
-              >{m}</button>
+              >{PAYMENT_DISPLAY[m] || m}</button>
             ))}
           </div>
         </div>
@@ -884,7 +890,7 @@ export default function Dashboard() {
                           <p className="text-xs text-caixa-muted">
                             {fmtDate(tx.date)}
                             {tx.category?.name ? ` · ${tx.category.name}` : ''}
-                            {tx.payment_method ? ` · ${tx.payment_method}` : ''}
+                            {tx.payment_method ? ` · ${fmtPayment(tx.payment_method)}` : ''}
                           </p>
                         </div>
                       </div>

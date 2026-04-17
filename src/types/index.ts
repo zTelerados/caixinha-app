@@ -66,7 +66,7 @@ export interface ParsedIncome {
 }
 
 export interface ParsedCorrection {
-  type: 'category' | 'amount';
+  type: 'category' | 'amount' | 'payment';
   term?: string;
   amount?: number;
 }

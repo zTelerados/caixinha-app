@@ -4,13 +4,12 @@ import { resolveCategory, suggestCategory, matchCategory } from '@/lib/categorie
 import { PendingAction, ParsedMessage } from '@/types';
 import { normalize } from '@/lib/formatter';
 import { monthLabel } from '@/lib/formatter';
+import { canonicalPayment, displayPayment } from '@/lib/normalize';
 import { handleExpense } from './expense';
 import { v4 as uuidv4 } from 'uuid';
 
 /**
  * Reconstruct Date objects and month_label after JSON deserialization.
- * When ParsedMessage is stored in Supabase JSONB, Date objects become
- * ISO strings. This function restores them so handleExpense works.
  */
 function hydrateParsed(raw: any): ParsedMessage {
   const parsed = { ...raw } as ParsedMessage;
@@ -21,19 +20,8 @@ function hydrateParsed(raw: any): ParsedMessage {
   return parsed;
 }
 
-const PAYMENT_KEYWORDS: Array<{ pattern: RegExp; method: string }> = [
-  { pattern: /cr[eé]dito|cartao|cartão/, method: 'Crédito' },
-  { pattern: /d[eé]bito/, method: 'Débito' },
-  { pattern: /pix/, method: 'Pix' },
-  { pattern: /dinheiro|cash|esp[eé]cie/, method: 'Dinheiro' },
-];
-
 function matchPaymentMethod(msg: string): string | null {
-  const low = msg.toLowerCase();
-  for (const { pattern, method } of PAYMENT_KEYWORDS) {
-    if (pattern.test(low)) return method;
-  }
-  return null;
+  return canonicalPayment(msg);
 }
 
 export async function handlePending(
@@ -62,7 +50,7 @@ export async function handlePending(
           created_at: new Date().toISOString(),
         };
         await supabaseAdmin.from('pending_actions').insert([newPending]);
-        return 'Beleza. Em qual categoria então? (alimentação, transporte, lazer...)';
+        return 'Beleza. Em qual categoria ent\u00e3o? (alimenta\u00e7\u00e3o, transporte, lazer...)';
       } else {
         const resolved = await resolveCategory(message, userId);
         if (resolved) {
@@ -80,9 +68,9 @@ export async function handlePending(
           };
           await supabaseAdmin.from('pending_actions').insert([newPending]);
           if (suggested) {
-            return `Não achei essa categoria. Tá em ${suggested.emoji} ${suggested.name}? (sim/não)`;
+            return `N\u00e3o achei essa categoria. T\u00e1 em ${suggested.emoji} ${suggested.name}? (sim/n\u00e3o)`;
           }
-          return 'Não achei essa categoria. Qual é? (alimentação, transporte, lazer...)';
+          return 'N\u00e3o achei essa categoria. Qual \u00e9? (alimenta\u00e7\u00e3o, transporte, lazer...)';
         }
       }
 
@@ -97,7 +85,7 @@ export async function handlePending(
           created_at: new Date().toISOString(),
         };
         await supabaseAdmin.from('pending_actions').insert([newPending]);
-        return 'Crédito, pix ou dinheiro?';
+        return 'Cr\u00e9dito, pix ou dinheiro?';
       }
 
       await supabaseAdmin.from('pending_actions').delete().eq('id', pending.id);
@@ -120,7 +108,7 @@ export async function handlePending(
           created_at: new Date().toISOString(),
         };
         await supabaseAdmin.from('pending_actions').insert([newPending]);
-        return 'Não entendi. Crédito, débito, pix ou dinheiro?';
+        return 'N\u00e3o entendi. Cr\u00e9dito, d\u00e9bito, pix ou dinheiro?';
       }
 
       parsed.payment_method = method;
@@ -129,10 +117,10 @@ export async function handlePending(
     }
 
     await supabaseAdmin.from('pending_actions').delete().eq('id', pending.id);
-    return 'Algo deu errado. Manda o gasto de novo do início.';
+    return 'Algo deu errado. Manda o gasto de novo do in\u00edcio.';
   } catch (e) {
     console.error('Pending action error:', e);
     await supabaseAdmin.from('pending_actions').delete().eq('id', pending.id);
-    return 'Deu ruim ao registrar. Manda o gasto de novo do início.';
+    return 'Deu ruim ao registrar. Manda o gasto de novo do in\u00edcio.';
   }
 }
