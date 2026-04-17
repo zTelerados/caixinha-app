@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Caixinha — A Casa sendo construída</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Inter', sans-serif;
+    background: #0a0a0a;
+    color: #e0e0e0;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ── Header ── */
+  .header {
+    text-align: center;
+    padding: 40px 20px 20px;
+  }
+  .header h1 {
+    font-size: 2.8rem;
+    font-weight: 900;
+    background: linear-gradient(135deg, #00c853, #00e676, #69f0ae);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    letter-spacing: -1px;
+  }
+  .header p {
+    color: #888;
+    font-size: 1rem;
+    margin-top: 8px;
+    font-weight: 300;
+  }
+  .header .badge {
+    display: inline-block;
+    margin-top: 12px;
+    padding: 4px 14px;
+    border-radius: 20px;
+    background: rgba(0,200,83,0.15);
+    color: #69f0ae;
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+
+  /* ── House Container ── */
+  .house-wrapper {
+    display: flex;
+    justify-content: center;
+    padding: 30px 20px;
+  }
+  .house {
+    position: relative;
+    width: 700px;
+    height: 520px;
+  }
+
+  /* ── SVG House ── */
+  .house svg {
+    width: 100%;
+    height: 100%;
+  }
+  .house-part {
+    cursor: pointer;
+    transition: all 0.3s ease;
+    opacity: 0.85;
+  }
+  .house-part:hover {
+    opacity: 1;
+    filter: brightness(1.3);
+  }
+  .house-part.active {
+    opacity: 1;
+    filter: brightness(1.4) drop-shadow(0 0 12px rgba(0,200,83,0.5));
+  }
+  .house-part-label {
+    font-family: 'Inter', sans-serif;
+    font-size: 11px;
+    font-weight: 600;
+    fill: #fff;
+    pointer-events: none;
+    text-anchor: middle;
+  }
+  .house-part-icon {
+    font-size: 18px;
+    pointer-events: none;
+    text-anchor: middle;
+  }
+
+  /* ── Info Panel ── */
+  .info-panel {
+    max-width: 700px;
+    margin: 0 auto 40px;
+    padding: 0 20px;
+  }
+  .info-card {
+    background: #141414;
+    border: 1px solid #222;
+    border-radius: 16px;
+    padding: 28px;
+    transition: all 0.4s ease;
+    min-height: 200px;
+  }
+  .info-card.highlight {
+    border-color: #00c853;
+    box-shadow: 0 0 30px rgba(0,200,83,0.1);
+  }
+  .info-card h2 {
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: #fff;
+    margin-bottom: 6px;
+  }
+  .info-card .tech-tag {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 6px;
+    background: rgba(0,200,83,0.12);
+    color: #69f0ae;
+    font-size: 0.7rem;
+    font-weight: 600;
+    margin-bottom: 14px;
+    letter-spacing: 0.5px;
+  }
+  .info-card p {
+    color: #aaa;
+    font-size: 0.95rem;
+    line-height: 1.7;
+    font-weight: 300;
+  }
+  .info-card .analogy {
+    margin-top: 16px;
+    padding: 14px 18px;
+    background: rgba(0,200,83,0.06);
+    border-left: 3px solid #00c853;
+    border-radius: 0 10px 10px 0;
+    color: #ccc;
+    font-size: 0.88rem;
+    line-height: 1.6;
+  }
+  .info-card .status {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 14px;
+    padding: 5px 12px;
+    border-radius: 8px;
+    font-size: 0.78rem;
+    font-weight: 600;
+  }
+  .status.done { background: rgba(0,200,83,0.15); color: #69f0ae; }
+  .status.building { background: rgba(255,183,0,0.15); color: #ffd54f; }
+  .status.planned { background: rgba(100,100,100,0.2); color: #888; }
+  .status-dot {
+    width: 7px; height: 7px; border-radius: 50%;
+  }
+  .status.done .status-dot { background: #00c853; }
+  .status.building .status-dot { background: #ffb700; animation: pulse 1.5s infinite; }
+  .status.planned .status-dot { background: #555; }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+
+  /* ── Timeline ── */
+  .timeline {
+    max-width: 700px;
+    margin: 0 auto 60px;
+    padding: 0 20px;
+  }
+  .timeline h3 {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: #fff;
+    margin-bottom: 20px;
+    text-align: center;
+  }
+  .timeline-items {
+    position: relative;
+    padding-left: 30px;
+  }
+  .timeline-items::before {
+    content: '';
+    position: absolute;
+    left: 8px;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: linear-gradient(to bottom, #00c853, #00c853 60%, #333 60%, #333);
+  }
+  .timeline-item {
+    position: relative;
+    margin-bottom: 18px;
+    padding: 12px 16px;
+    background: #141414;
+    border-radius: 10px;
+    border: 1px solid #1a1a1a;
+  }
+  .timeline-item::before {
+    content: '';
+    position: absolute;
+    left: -26px;
+    top: 16px;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    border: 2px solid #00c853;
+    background: #0a0a0a;
+  }
+  .timeline-item.done::before { background: #00c853; }
+  .timeline-item.current::before { background: #ffb700; border-color: #ffb700; box-shadow: 0 0 8px rgba(255,183,0,0.5); }
+  .timeline-item.future::before { border-color: #333; }
+  .timeline-item .tl-title {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #ddd;
+  }
+  .timeline-item .tl-desc {
+    font-size: 0.75rem;
+    color: #777;
+    margin-top: 3px;
+  }
+  .timeline-item.done .tl-title { color: #69f0ae; }
+  .timeline-item.current .tl-title { color: #ffd54f; }
+  .timeline-item.future .tl-title { color: #555; }
+
+  /* ── Progress Bar ── */
+  .progress-section {
+    max-width: 700px;
+    margin: 0 auto 30px;
+    padding: 0 20px;
+  }
+  .progress-bar-bg {
+    width: 100%;
+    height: 8px;
+    background: #1a1a1a;
+    border-radius: 4px;
+    overflow: hidden;
+  }
+  .progress-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #00c853, #69f0ae);
+    border-radius: 4px;
+    transition: width 1.5s ease;
+  }
+  .progress-labels {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 8px;
+    font-size: 0.72rem;
+    color: #666;
+  }
+  .progress-labels span.active { color: #69f0ae; font-weight: 600; }
+
+  /* ── Footer ── */
+  .footer {
+    text-align: center;
+    padding: 40px 20px;
+    color: #333;
+    font-size: 0.75rem;
+  }
+
+  /* ── Responsive ── */
+  @media (max-width: 768px) {
+    .header h1 { font-size: 2rem; }
+    .house { width: 100%; height: 380px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Caixinha</h1>
+  <p>Seu assessor financeiro pessoal no WhatsApp</p>
+  <div class="badge">Construção ao vivo</div>
+</div>
+
+<div class="progress-section">
+  <div class="progress-bar-bg">
+    <div class="progress-bar-fill" style="width: 62%"></div>
+  </div>
+  <div class="progress-labels">
+    <span class="active">Fundação</span>
+    <span class="active">Estrutura</span>
+    <span class="active">Encanamento</span>
+    <span style="color:#ffd54f;font-weight:600">Elétrica</span>
+    <span>Acabamento</span>
+    <span>Decoração</span>
+  </div>
+</div>
+
+<div class="house-wrapper">
+  <div class="house">
+    <svg viewBox="0 0 700 520" xmlns="http://www.w3.org/2000/svg">
+      <!-- Terreno -->
+      <rect x="50" y="460" width="600" height="50" rx="6" fill="#1a1a1a" stroke="#333" stroke-width="1"
+            class="house-part" data-part="terreno" />
+      <text x="350" y="490" class="house-part-label" fill="#555">SERVIDOR (VERCEL)</text>
+
+      <!-- Fundação -->
+      <rect x="100" y="390" width="500" height="70" rx="4" fill="#1b3a1b" stroke="#2d5a2d" stroke-width="1.5"
+            class="house-part" data-part="fundacao" />
+      <text x="350" y="418" class="house-part-icon">🗄️</text>
+      <text x="350" y="440" class="house-part-label">BANCO DE DADOS</text>
+
+      <!-- Colunas / Estrutura -->
+      <rect x="110" y="220" width="110" height="170" rx="3" fill="#1a2a3a" stroke="#2a4a6a" stroke-width="1.5"
+            class="house-part" data-part="parser" />
+      <text x="165" y="290" class="house-part-icon">🧠</text>
+      <text x="165" y="315" class="house-part-label">PARSER</text>
+      <text x="165" y="330" class="house-part-label" fill="#556">Entende o que</text>
+      <text x="165" y="343" class="house-part-label" fill="#556">você disse</text>
+
+      <rect x="230" y="220" width="110" height="170" rx="3" fill="#2a1a2a" stroke="#5a2a5a" stroke-width="1.5"
+            class="house-part" data-part="handlers" />
+      <text x="285" y="290" class="house-part-icon">⚙️</text>
+      <text x="285" y="315" class="house-part-label">HANDLERS</text>
+      <text x="285" y="330" class="house-part-label" fill="#556">Executa a</text>
+      <text x="285" y="343" class="house-part-label" fill="#556">ação certa</text>
+
+      <rect x="350" y="220" width="110" height="170" rx="3" fill="#2a2a1a" stroke="#5a5a2a" stroke-width="1.5"
+            class="house-part" data-part="normalize" />
+      <text x="405" y="290" class="house-part-icon">🔤</text>
+      <text x="405" y="315" class="house-part-label">NORMALIZE</text>
+      <text x="405" y="330" class="house-part-label" fill="#556">Corrige typos</text>
+      <text x="405" y="343" class="house-part-label" fill="#556">e erros</text>
+
+      <rect x="470" y="220" width="120" height="170" rx="3" fill="#1a2a2a" stroke="#2a5a5a" stroke-width="1.5"
+            class="house-part" data-part="whatsapp" />
+      <text x="530" y="278" class="house-part-icon">📱</text>
+      <text x="530" y="303" class="house-part-label">WHATSAPP</text>
+      <text x="530" y="318" class="house-part-label" fill="#556">Provider</text>
+      <text x="530" y="331" class="house-part-label" fill="#556">Meta / Twilio</text>
+      <!-- Pulsing indicator for "building" -->
+      <circle cx="575" cy="232" r="5" fill="#ffb700">
+        <animate attributeName="opacity" values="1;0.3;1" dur="1.5s" repeatCount="indefinite"/>
+      </circle>
+
+      <!-- Telhado -->
+      <polygon points="80,220 350,80 620,220" fill="#0d1f0d" stroke="#1a3a1a" stroke-width="1.5"
+               class="house-part" data-part="telhado" />
+      <text x="350" y="170" class="house-part-icon">🏠</text>
+      <text x="350" y="195" class="house-part-label">WEBHOOK — A PORTA DE ENTRADA</text>
+
+      <!-- Porta (WhatsApp entry) -->
+      <rect x="300" y="340" width="55" height="50" rx="3" fill="#0d2a0d" stroke="#00c853" stroke-width="2"
+            class="house-part" data-part="porta" />
+      <text x="327" y="372" class="house-part-icon" font-size="22">💬</text>
+
+      <!-- Antena (futuro) -->
+      <line x1="350" y1="80" x2="350" y2="40" stroke="#333" stroke-width="2"/>
+      <circle cx="350" cy="35" r="6" fill="none" stroke="#333" stroke-width="1.5"
+              class="house-part" data-part="futuro" />
+      <circle cx="350" cy="35" r="3" fill="#333" class="house-part" data-part="futuro" />
+
+      <!-- Janelas (features) -->
+      <rect x="135" y="240" width="30" height="25" rx="2" fill="#0a1520" stroke="#2a4a6a" stroke-width="1"/>
+      <rect x="185" y="240" width="30" height="25" rx="2" fill="#0a1520" stroke="#2a4a6a" stroke-width="1"/>
+
+      <!-- Botões (Fase B - em construção) -->
+      <g class="house-part" data-part="botoes" transform="translate(470, 355)">
+        <rect x="0" y="0" width="35" height="16" rx="8" fill="#00c853" opacity="0.3" stroke="#00c853" stroke-width="1"/>
+        <text x="17" y="12" text-anchor="middle" font-size="7" fill="#69f0ae" font-family="Inter">Pix</text>
+        <rect x="40" y="0" width="35" height="16" rx="8" fill="#00c853" opacity="0.3" stroke="#00c853" stroke-width="1"/>
+        <text x="57" y="12" text-anchor="middle" font-size="7" fill="#69f0ae" font-family="Inter">Créd</text>
+        <rect x="80" y="0" width="35" height="16" rx="8" fill="#00c853" opacity="0.3" stroke="#00c853" stroke-width="1"/>
+        <text x="97" y="12" text-anchor="middle" font-size="7" fill="#69f0ae" font-family="Inter">Din</text>
+        <circle cx="110" cy="3" r="4" fill="#ffb700">
+          <animate attributeName="opacity" values="1;0.3;1" dur="1.5s" repeatCount="indefinite"/>
+        </circle>
+      </g>
+    </svg>
+  </div>
+</div>
+
+<div class="info-panel">
+  <div class="info-card" id="infoCard">
+    <h2 id="infoTitle">Clica em qualquer parte da casa</h2>
+    <p id="infoDesc">Cada pedaço da casa representa uma camada real do Caixinha. Clica pra entender o que cada parte faz e em que fase tá.</p>
+    <div class="analogy" id="infoAnalogy">
+      <strong>A analogia:</strong> Construir um app é igual construir uma casa. Você não começa pelo telhado — começa pela fundação, sobe as paredes, passa o encanamento, puxa a fiação, e só no final faz o acabamento. O Caixinha tá nessa jornada agora, ao vivo.
+    </div>
+  </div>
+</div>
+
+<div class="timeline">
+  <h3>Cronologia da obra</h3>
+  <div class="timeline-items">
+    <div class="timeline-item done">
+      <div class="tl-title">Fundação — Banco de dados e estrutura base</div>
+      <div class="tl-desc">Supabase, tabelas, autenticação, registro de gastos básico</div>
+    </div>
+    <div class="timeline-item done">
+      <div class="tl-title">Paredes — Parser e handlers de mensagem</div>
+      <div class="tl-desc">O bot entende "gastei 30 no uber" e sabe o que fazer com isso</div>
+    </div>
+    <div class="timeline-item done">
+      <div class="tl-title">Encanamento — Categorias, resumos, correção, undo</div>
+      <div class="tl-desc">Fluxos completos: registrar, corrigir, apagar, consultar</div>
+    </div>
+    <div class="timeline-item done">
+      <div class="tl-title">Isolamento — Camada de compreensão humana</div>
+      <div class="tl-desc">Typos, fuzzy matching, números por extenso ("cinquenta reais")</div>
+    </div>
+    <div class="timeline-item done">
+      <div class="tl-title">Fiação — Arquitetura provider-agnóstico WhatsApp</div>
+      <div class="tl-desc">Migração pra Meta Cloud API com fallback pro Twilio</div>
+    </div>
+    <div class="timeline-item current">
+      <div class="tl-title">Interruptores — Botões interativos</div>
+      <div class="tl-desc">Pix / Crédito / Dinheiro clicáveis em vez de digitar</div>
+    </div>
+    <div class="timeline-item future">
+      <div class="tl-title">Acabamento — Dashboard PWA e multi-usuário</div>
+      <div class="tl-desc">App mobile, gráficos, compartilhar com parceiro(a)</div>
+    </div>
+    <div class="timeline-item future">
+      <div class="tl-title">Decoração — IA preditiva e insights proativos</div>
+      <div class="tl-desc">"Você tá gastando 40% mais em transporte que mês passado"</div>
+    </div>
+  </div>
+</div>
+
+<div class="footer">
+  Caixinha — por Thiago Ribeiro — stream ao vivo
+</div>
+
+<script>
+const parts = {
+  terreno: {
+    title: '🖥️ Servidor (Vercel)',
+    tag: 'INFRAESTRUTURA',
+    desc: 'É o terreno onde a casa fica. O Vercel é o servidor que roda o Caixinha 24h por dia. Toda vez que alguém manda mensagem no WhatsApp, é o Vercel que recebe, processa e responde. Sem terreno, não tem casa.',
+    analogy: 'Imagina o terreno de uma casa. Pode ter a melhor planta do mundo, mas sem terreno você não constrói nada. O Vercel é esse terreno — sempre disponível, sempre ligado.',
+    status: 'done',
+    statusText: 'Funcionando'
+  },
+  fundacao: {
+    title: '🗄️ Banco de Dados (Supabase)',
+    tag: 'FUNDAÇÃO',
+    desc: 'É onde TUDO fica guardado: seus gastos, categorias, configurações, histórico. Cada "gastei 30 no uber" vira uma linha no banco. Sem banco de dados, o bot teria memória de peixe — esqueceria tudo em 5 segundos.',
+    analogy: 'A fundação da casa. Invisível, enterrada no chão, ninguém vê. Mas se ela rachar, a casa inteira cai. O banco de dados é isso — ninguém pensa nele, mas ele segura tudo.',
+    status: 'done',
+    statusText: 'Funcionando'
+  },
+  parser: {
+    title: '🧠 Parser (Interpretador)',
+    tag: 'INTELIGÊNCIA',
+    desc: 'É o cérebro do bot. Quando você manda "gastei 30 no uber pix", o parser separa: descrição = "uber", valor = 30, pagamento = "pix". Ele entende português natural, com erros, gírias e abreviações. "gasti 50 no ifod" → ele entende.',
+    analogy: 'É o arquiteto da casa que olha a planta e entende o que cada risco significa. Você fala de qualquer jeito e ele traduz pro sistema.',
+    status: 'done',
+    statusText: 'Funcionando'
+  },
+  handlers: {
+    title: '⚙️ Handlers (Executores)',
+    tag: 'LÓGICA DE NEGÓCIO',
+    desc: 'Cada tipo de ação tem um handler: registrar gasto, corrigir, apagar, ver resumo, configurar. O parser entende o que você quis. O handler executa. São os pedreiros — cada um com sua especialidade.',
+    analogy: 'Os cômodos da casa. Cozinha faz comida, banheiro faz outra coisa. Cada handler é um cômodo com uma função específica. O "gastei" vai pro handler de gasto. O "resumo" vai pro handler de consulta.',
+    status: 'done',
+    statusText: 'Funcionando'
+  },
+  normalize: {
+    title: '🔤 Normalize (Corretor)',
+    tag: 'COMPREENSÃO HUMANA',
+    desc: 'A camada que faz o bot entender humano de verdade. Corrige typos (pic → pix), aceita números por extenso (cinquenta → 50), normaliza acentos, ignora emojis. Construída hoje nessa stream.',
+    analogy: 'É o reboco da parede. A parede (parser) já tá de pé, mas sem reboco fica áspera — qualquer errinho de digitação e o sistema não entende. O normalize é o acabamento que deixa tudo liso.',
+    status: 'done',
+    statusText: 'Recém-construído'
+  },
+  whatsapp: {
+    title: '📱 WhatsApp Provider',
+    tag: 'COMUNICAÇÃO',
+    desc: 'A camada que conecta o Caixinha ao WhatsApp. Antes era só Twilio (serviço intermediário). Agora tem arquitetura pra funcionar com Meta Cloud API (direto com o WhatsApp oficial) OU Twilio. Troca de um pro outro mudando uma variável.',
+    analogy: 'O encanamento da casa. Você abre a torneira e sai água — não importa se vem da rua ou de um poço. O "provider" é isso: o bot manda mensagem e não importa se vai pelo Twilio ou pela Meta.',
+    status: 'building',
+    statusText: 'Fase A pronta, configurando Meta'
+  },
+  telhado: {
+    title: '🏠 Webhook (Porta de entrada)',
+    tag: 'ROTEAMENTO',
+    desc: 'O webhook é o endereço que o WhatsApp chama quando alguém manda mensagem. É literalmente a porta da frente da casa. A mensagem chega aqui, é identificada (veio do Twilio? da Meta?), normalizada, e enviada pro cômodo certo.',
+    analogy: 'O telhado + porta da frente. Protege a casa da chuva (mensagens inválidas, spam, duplicatas) e direciona quem entra pro lugar certo.',
+    status: 'done',
+    statusText: 'Funcionando (unificado)'
+  },
+  porta: {
+    title: '💬 Sua Mensagem',
+    tag: 'ENTRADA DO USUÁRIO',
+    desc: 'Aqui é onde tudo começa. Você manda "gastei 30 no uber" no WhatsApp. A mensagem entra pela porta, passa pelo telhado (webhook), desce pro normalize (correção), vai pro parser (interpretação), chega no handler (execução), e salva na fundação (banco). Resposta sobe o caminho inverso.',
+    analogy: 'Você tocando a campainha. A casa inteira se move pra te atender — em menos de 2 segundos.',
+    status: 'done',
+    statusText: 'Funcionando'
+  },
+  botoes: {
+    title: '🔘 Botões Interativos',
+    tag: 'PRÓXIMA FASE',
+    desc: 'Em vez de o bot perguntar "Crédito, pix ou dinheiro?" e você ter que digitar, vai aparecer 3 botões clicáveis: [Pix] [Crédito] [Dinheiro]. Toque e pronto. Sem chance de erro de ortografia. Também vai ter botões pra categoria, correção e confirmação de valores altos.',
+    analogy: 'Os interruptores de luz da casa. A fiação (Meta API) já tá passada. Agora é instalar os interruptores — você toca e a luz acende. Sem precisar gritar "LIGA A LUZ!" e torcer pro sistema entender.',
+    status: 'building',
+    statusText: 'Fase B — próxima'
+  },
+  futuro: {
+    title: '📡 O Futuro',
+    tag: 'ROADMAP',
+    desc: 'Dashboard mobile (PWA), gráficos de gasto, multi-usuário (dividir com parceiro/a), IA preditiva ("você tá gastando mais que o normal"), lembrete matinal, fechamento mensal automático, integração com planilha Google Sheets.',
+    analogy: 'A antena no topo da casa. Quando a casa tiver pronta — fundação firme, paredes de pé, encanamento funcionando, luz acesa — aí sim a antena capta sinal do futuro. Cada feature nova é um canal a mais.',
+    status: 'planned',
+    statusText: 'Planejado'
+  }
+};
+
+// Click handlers
+document.querySelectorAll('.house-part').forEach(el => {
+  el.addEventListener('click', () => {
+    const partId = el.dataset.part;
+    if (!partId || !parts[partId]) return;
+
+    // Remove active from all
+    document.querySelectorAll('.house-part').forEach(p => p.classList.remove('active'));
+    // Add active to all elements with same data-part
+    document.querySelectorAll(`[data-part="${partId}"]`).forEach(p => p.classList.add('active'));
+
+    const info = parts[partId];
+    const card = document.getElementById('infoCard');
+    const statusClass = info.status === 'done' ? 'done' : info.status === 'building' ? 'building' : 'planned';
+    const statusIcon = info.status === 'done' ? '✅' : info.status === 'building' ? '🔨' : '📋';
+
+    card.classList.add('highlight');
+    setTimeout(() => card.classList.remove('highlight'), 2000);
+
+    document.getElementById('infoTitle').textContent = info.title;
+    document.getElementById('infoDesc').innerHTML = `
+      <span class="tech-tag">${info.tag}</span><br><br>
+      ${info.desc}
+      <br>
+      <div class="status ${statusClass}">
+        <span class="status-dot"></span>
+        ${statusIcon} ${info.statusText}
+      </div>
+    `;
+    document.getElementById('infoAnalogy').innerHTML = `<strong>Na analogia da casa:</strong> ${info.analogy}`;
+  });
+});
+
+// Auto-select first part on load
+setTimeout(() => {
+  document.querySelector('[data-part="porta"]')?.click();
+}, 500);
+</script>
+</body>
+</html>

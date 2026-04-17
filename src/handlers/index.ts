@@ -20,12 +20,18 @@ import { handleExpense } from './expense';
 import { handleOnboarding, getOnboardingClosing } from './onboarding';
 import { handleConfig } from './config';
 import { createDebugContext } from '@/lib/debug-log';
+import { fmtValor } from '@/lib/formatter';
+import { displayPayment } from '@/lib/normalize';
 import { v4 as uuidv4 } from 'uuid';
+
+// ─── Limiar de valor alto pra pedir confirmação ─────────
+const HIGH_VALUE_THRESHOLD = 200;
 
 export async function routeMessage(
   phone: string,
   message: string,
   audioTranscription?: string,
+  buttonPayload?: string,
 ): Promise<void> {
   const send = async (msg: string) => {
     const finalMsg = audioTranscription ? wrapAudioResponse(msg, audioTranscription) : msg;
@@ -125,9 +131,13 @@ export async function routeMessage(
       dbg.setIntent('pending_response');
       dbg.setPending(JSON.stringify({ type: p.type, id: p.id }));
       dbg.setHandler('handlePending');
-      const response = await handlePending(user.id, phone, message, p);
-      const sent = await send(maybeAppendClosing(response));
-      dbg.setResponse(sent);
+      const result = await handlePending(user.id, phone, message, p, buttonPayload);
+      if (result.buttons && result.buttons.length > 0) {
+        await sendButtons(phone, result.response, result.buttons);
+      } else {
+        const sent = await send(maybeAppendClosing(result.response));
+        dbg.setResponse(sent);
+      }
       await dbg.flush();
       return;
     }
@@ -199,6 +209,7 @@ export async function routeMessage(
 
       let response: string;
 
+      // ── Categoria não identificada → botões ──
       if (parsed.category_id === null || parsed.category_id === undefined) {
         const matched = await matchCategory(parsed.description, user.id);
         if (matched) {
@@ -206,6 +217,7 @@ export async function routeMessage(
           parsed.category_name = matched.name;
           parsed.category_source = 'learned';
         } else {
+          // Busca top 3 categorias mais prováveis
           const suggested = await suggestCategory(parsed.description, user.id);
           const newPending: PendingAction = {
             id: uuidv4(),
@@ -218,19 +230,32 @@ export async function routeMessage(
           await supabaseAdmin.from('pending_actions').insert([newPending]);
 
           dbg.setHandler('ask_category');
-          if (suggested) {
-            response = `${parsed.description} de ${parsed.amount}. T\u00e1 em ${suggested.emoji} ${suggested.name}? (sim/n\u00e3o)`;
+
+          // Monta botões com top categorias
+          const topCats = categories.slice(0, 2); // 2 mais usadas + "Outra"
+          if (suggested && topCats.length > 0) {
+            const catButtons = [
+              { id: `cat_${suggested.id}`, title: `${suggested.emoji} ${suggested.name}`.slice(0, 20) },
+              ...topCats
+                .filter(c => c.id !== suggested.id)
+                .slice(0, 1)
+                .map(c => ({ id: `cat_${c.id}`, title: `${c.emoji} ${c.name}`.slice(0, 20) })),
+              { id: 'cat_outra', title: 'Outra' },
+            ];
+            response = `${parsed.description} ${fmtValor(parsed.amount)}. Qual categoria?`;
+            await sendButtons(phone, response, catButtons);
           } else {
-            response = `${parsed.description} de ${parsed.amount}. Em qual categoria? (alimenta\u00e7\u00e3o, transporte, lazer...)`;
+            response = `${parsed.description} ${fmtValor(parsed.amount)}. Em qual categoria?`;
+            await send(response);
           }
 
-          const sent = await send(response);
-          dbg.setResponse(sent);
+          dbg.setResponse(response);
           await dbg.flush();
           return;
         }
       }
 
+      // ── Pagamento não especificado → botões ──
       if (parsed.payment_method === null || parsed.payment_method === undefined) {
         if (user.default_payment) {
           parsed.payment_method = user.default_payment;
@@ -246,18 +271,57 @@ export async function routeMessage(
           await supabaseAdmin.from('pending_actions').insert([newPending]);
 
           dbg.setHandler('ask_payment_method');
-          response = 'Cr\u00e9dito, pix ou dinheiro?';
-          const sent = await send(response);
-          dbg.setResponse(sent);
+          response = `${parsed.description} ${fmtValor(parsed.amount)}. Como pagou?`;
+          await sendButtons(phone, response, [
+            { id: 'pix', title: 'Pix' },
+            { id: 'credito', title: 'Credito' },
+            { id: 'dinheiro', title: 'Dinheiro' },
+          ]);
+          dbg.setResponse(response);
           await dbg.flush();
           return;
         }
       }
 
+      // ── Valor alto → pedir confirmação ──
+      if (parsed.amount >= HIGH_VALUE_THRESHOLD) {
+        const catLabel = parsed.category_name || 'sem categoria';
+        const payLabel = displayPayment(parsed.payment_method) || 'sem forma';
+        const confirmMsg = `Anotar? ${parsed.description} ${fmtValor(parsed.amount)} em ${catLabel} (${payLabel})`;
+
+        const newPending: PendingAction = {
+          id: uuidv4(),
+          user_id: user.id,
+          type: 'confirm_high_value',
+          payload: { parsed },
+          expires_at: new Date(Date.now() + 10 * 60000).toISOString(),
+          created_at: new Date().toISOString(),
+        };
+        await supabaseAdmin.from('pending_actions').insert([newPending]);
+
+        dbg.setHandler('ask_confirm_high_value');
+        await sendButtons(phone, confirmMsg, [
+          { id: 'confirm_yes', title: 'Sim' },
+          { id: 'confirm_edit', title: 'Corrigir' },
+          { id: 'confirm_cancel', title: 'Cancelar' },
+        ]);
+        dbg.setResponse(confirmMsg);
+        await dbg.flush();
+        return;
+      }
+
+      // ── Registrar gasto ──
       dbg.setHandler('handleExpense');
       response = await handleExpense(user.id, parsed, phone);
-      const sent = await send(maybeAppendClosing(response));
-      dbg.setResponse(sent);
+      const finalResponse = maybeAppendClosing(response);
+
+      // Envia resposta com botões de correção rápida
+      await sendButtons(phone, finalResponse, [
+        { id: 'post_corrigir', title: 'Corrigir' },
+        { id: 'post_apagar', title: 'Apagar' },
+      ]);
+
+      dbg.setResponse(finalResponse);
       await dbg.flush();
       return;
     }

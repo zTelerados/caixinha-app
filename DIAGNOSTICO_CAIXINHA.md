@@ -16,7 +16,7 @@
 ## Progresso Geral por Modulo
 
 ```
-Bot WhatsApp / Conversacao             ██████████████████████████░░░░  87%
+Bot WhatsApp / Conversacao             ████████████████████████████░░  92%
 Categorizacao Inteligente              ██████████████████████████░░░░  85%
 Banco de Dados / Persistencia          █████████████████████████░░░░░  82%
 Dashboard Web                          ████████████████████████████░░  92%
@@ -36,7 +36,7 @@ Integracao WhatsApp Oficial            ░░░░░░░░░░░░░�
 
 | Modulo | Status | Detalhes |
 |--------|--------|----------|
-| **Bot WhatsApp / Conversacao** | 🟢 Funcional | Falta: PENALTY: parser nao usa learned_items recall, PENALTY: nenhuma edge-case validation. |
+| **Bot WhatsApp / Conversacao** | 🟢 Funcional | Falta: PENALTY: parser nao usa learned_items recall, PENALTY: nenhuma edge-case validation, PENALTY: sem validacao pre-envio (ambiguidade). |
 | **Categorizacao Inteligente** | 🟢 Funcional | Falta: PENALTY: learnItem saved mas parser nao usa, Criar categoria via /create category, PENALTY: sem fuzzy/typo tolerance. |
 | **Banco de Dados / Persistencia** | 🟢 Funcional | Falta: Cliente Supabase com ANON + SERVICE keys, PENALTY: sem migrations versionadas, PENALTY: sem backup strategy. |
 | **Dashboard Web** | 🟢 Funcional | Falta: PENALTY: sem adicionar transacao manual, PENALTY: sem settings/config page, PENALTY: sem drill-down em categorias. |
@@ -76,6 +76,7 @@ Esses modulos permanecem em 0% ou baixo percentual de forma proposital. Quando c
 
 ## Historico de Versoes
 
+- **3700769** — progresso geral 61% (17 de abril de 2026)
 - **2309436** — progresso geral 61% (16 de abril de 2026)
 - **2309436** — progresso geral 61% (16 de abril de 2026)
 - **83853c6** — progresso geral 61% (16 de abril de 2026)
@@ -84,5 +85,4 @@ Esses modulos permanecem em 0% ou baixo percentual de forma proposital. Quando c
 - **d765e8b** — progresso geral 61% (16 de abril de 2026)
 - **93deafd** — progresso geral 61% (16 de abril de 2026)
 - **4f5528c** — progresso geral 61% (16 de abril de 2026)
-- **391bb76** — progresso geral 61% (16 de abril de 2026)
 - **391bb76** — progresso geral 61% (16 de abril de 2026)

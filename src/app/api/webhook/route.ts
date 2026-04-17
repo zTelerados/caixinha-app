@@ -136,7 +136,7 @@ async function handleMetaWebhook(req: NextRequest): Promise<NextResponse> {
   }
 
   // Rotear mensagem (mesmo fluxo pra qualquer provider)
-  await routeMessage(phone, messageBody);
+  await routeMessage(phone, messageBody, undefined, isButtonReply ? buttonPayload : undefined);
 
   return NextResponse.json({ status: 'ok' });
 }
