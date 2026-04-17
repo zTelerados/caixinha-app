@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
-import { sendWhatsApp } from '@/lib/twilio';
+import { sendWhatsApp } from '@/lib/whatsapp';
 import { buildDailyMorningMessage } from '@/lib/responses';
 import { User } from '@/types';
 

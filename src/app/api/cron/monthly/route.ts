@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
-import { sendWhatsApp } from '@/lib/twilio';
+import { sendWhatsApp } from '@/lib/whatsapp';
 import { monthLabel, fmtDate, fmtValor } from '@/lib/formatter';
 import { buildMonthlyNarrative, MonthlyStats } from '@/lib/narrative';
 import { User } from '@/types';

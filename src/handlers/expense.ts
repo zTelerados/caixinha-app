@@ -1,5 +1,5 @@
 import { supabaseAdmin } from '@/lib/supabase';
-import { sendWhatsApp } from '@/lib/twilio';
+import { sendWhatsApp } from '@/lib/whatsapp';
 import { monthLabel } from '@/lib/formatter';
 import { learnItem, getCategories } from '@/lib/categories';
 import { checkAnomalies } from '@/lib/anomaly';

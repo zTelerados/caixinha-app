@@ -2,7 +2,7 @@
 
 **Stack:** Node.js · TypeScript · Supabase (PostgreSQL) · Next.js 14 · Vercel · Tailwind CSS · Recharts · Twilio · WhatsApp Sandbox
 **Versao em producao:** v8.0
-**Ultima atualizacao:** 16 de abril de 2026
+**Ultima atualizacao:** 17 de abril de 2026
 **Gerado automaticamente por** `npm run diagnose`
 
 ---
@@ -77,6 +77,7 @@ Esses modulos permanecem em 0% ou baixo percentual de forma proposital. Quando c
 ## Historico de Versoes
 
 - **2309436** — progresso geral 61% (16 de abril de 2026)
+- **2309436** — progresso geral 61% (16 de abril de 2026)
 - **83853c6** — progresso geral 61% (16 de abril de 2026)
 - **6bb1ed2** — progresso geral 61% (16 de abril de 2026)
 - **6bb1ed2** — progresso geral 61% (16 de abril de 2026)
@@ -85,4 +86,3 @@ Esses modulos permanecem em 0% ou baixo percentual de forma proposital. Quando c
 - **4f5528c** — progresso geral 61% (16 de abril de 2026)
 - **391bb76** — progresso geral 61% (16 de abril de 2026)
 - **391bb76** — progresso geral 61% (16 de abril de 2026)
-- **a25b0c7** — progresso geral 61% (16 de abril de 2026)

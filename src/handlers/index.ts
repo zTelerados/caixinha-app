@@ -1,5 +1,5 @@
 import { supabaseAdmin } from '@/lib/supabase';
-import { sendWhatsApp } from '@/lib/twilio';
+import { sendWhatsApp, sendButtons } from '@/lib/whatsapp';
 import { getCategories, suggestCategory, matchCategory } from '@/lib/categories';
 import {
   detectUndo,
