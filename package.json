@@ -9,6 +9,7 @@
     "migrate": "npx tsx scripts/migrate-from-sheets.ts",
     "diagnose": "node scripts/diagnose.js",
     "backup": "node scripts/backup.js",
+    "test:match": "SUPABASE_URL=http://localhost SUPABASE_SERVICE_KEY=fake NEXT_PUBLIC_SUPABASE_URL=http://localhost NEXT_PUBLIC_SUPABASE_ANON_KEY=fake tsx scripts/test-category-match.ts",
     "prepare": "husky"
   },
   "dependencies": {

@@ -29,15 +29,90 @@ function levenshteinDistance(str1: string, str2: string): number {
   return dp[m][n];
 }
 
-function fuzzyMatch(text: string, pattern: string): boolean {
+// Substring match com guarda de tamanho mínimo (3 chars)
+// para evitar que learned_items curtos casem com qualquer texto
+const MIN_SUBSTR_LEN = 3;
+const MIN_FUZZY_LEN = 4;
+
+function substringMatchScore(text: string, term: string): number {
+  if (term.length < MIN_SUBSTR_LEN) return 0;
+  // Match direto: term inteiro dentro do text → score = tamanho do term
+  if (text.includes(term)) return term.length;
+  // Match invertido: text inteiro dentro do term (texto curto, term mais longo)
+  // só vale se text também tiver tamanho mínimo
+  if (text.length >= MIN_SUBSTR_LEN && term.includes(text)) return text.length;
+  return 0;
+}
+
+function fuzzyMatchScore(text: string, term: string): number {
+  if (text.length < MIN_FUZZY_LEN || term.length < MIN_FUZZY_LEN) return 0;
+  const tolerance = Math.min(text.length, term.length) >= 5 ? 2 : 1;
+  const distance = levenshteinDistance(text, term);
+  if (distance > tolerance) return 0;
+  // Score: tamanho da menor string menos distância (priorizar match mais forte)
+  return Math.min(text.length, term.length) - distance;
+}
+
+export type MatchResult = {
+  category: Category;
+  score: number;
+  source: 'keyword' | 'learned';
+  via: 'substring' | 'fuzzy';
+  matched: string;
+};
+
+// Helper puro: encontra a melhor categoria para um texto, dada uma lista pré-carregada.
+// Não depende de DB. Usado pelo parser e pelo matchCategory.
+export function findBestCategoryMatch(
+  text: string,
+  categories: Category[]
+): MatchResult | null {
   const textNorm = normalize(text);
-  const patternNorm = normalize(pattern);
+  if (!textNorm) return null;
 
-  // For words >= 5 chars: tolerance of 2, for shorter: tolerance of 1
-  const tolerance = Math.min(textNorm.length, patternNorm.length) >= 5 ? 2 : 1;
-  const distance = levenshteinDistance(textNorm, patternNorm);
+  let best: MatchResult | null = null;
 
-  return distance <= tolerance;
+  const consider = (
+    candidate: MatchResult,
+    tier: number
+  ) => {
+    // Tier menor = prioridade maior (substring keyword > substring learned > fuzzy keyword > fuzzy learned)
+    // Empate: maior score vence
+    if (!best) { best = { ...candidate, score: candidate.score - tier * 1000 }; return; }
+    const adjusted = candidate.score - tier * 1000;
+    if (adjusted > best.score) best = { ...candidate, score: adjusted };
+  };
+
+  // Tier 0: keywords substring
+  for (const cat of categories) {
+    for (const kw of cat.keywords || []) {
+      const score = substringMatchScore(textNorm, normalize(kw));
+      if (score > 0) consider({ category: cat, score, source: 'keyword', via: 'substring', matched: kw }, 0);
+    }
+  }
+  // Tier 1: learned_items substring
+  for (const cat of categories) {
+    for (const item of (cat.learned_items as string[]) || []) {
+      const score = substringMatchScore(textNorm, normalize(item));
+      if (score > 0) consider({ category: cat, score, source: 'learned', via: 'substring', matched: item }, 1);
+    }
+  }
+  // Tier 2: keywords fuzzy
+  for (const cat of categories) {
+    for (const kw of cat.keywords || []) {
+      const score = fuzzyMatchScore(textNorm, normalize(kw));
+      if (score > 0) consider({ category: cat, score, source: 'keyword', via: 'fuzzy', matched: kw }, 2);
+    }
+  }
+  // Tier 3: learned_items fuzzy
+  for (const cat of categories) {
+    for (const item of (cat.learned_items as string[]) || []) {
+      const score = fuzzyMatchScore(textNorm, normalize(item));
+      if (score > 0) consider({ category: cat, score, source: 'learned', via: 'fuzzy', matched: item }, 3);
+    }
+  }
+
+  return best;
 }
 
 export async function getCategories(userId: string): Promise<Category[]> {
@@ -62,41 +137,8 @@ export async function matchCategory(
   userId: string
 ): Promise<Category | null> {
   const cats = await getCategories(userId);
-  const norm = normalize(text);
-
-  // 1. Check keywords (exact/substring match)
-  for (const cat of cats) {
-    for (const kw of cat.keywords || []) {
-      const kwNorm = normalize(kw);
-      if (norm.includes(kwNorm) || kwNorm.includes(norm)) return cat;
-    }
-  }
-
-  // 2. Check learned items (exact/substring match)
-  for (const cat of cats) {
-    const learned = (cat.learned_items as string[]) || [];
-    for (const item of learned) {
-      const itemNorm = normalize(item);
-      if (norm.includes(itemNorm) || itemNorm.includes(norm)) return cat;
-    }
-  }
-
-  // 3. Check keywords (fuzzy match for higher confidence)
-  for (const cat of cats) {
-    for (const kw of cat.keywords || []) {
-      if (fuzzyMatch(norm, kw)) return cat;
-    }
-  }
-
-  // 4. Check learned items (fuzzy match for higher confidence)
-  for (const cat of cats) {
-    const learned = (cat.learned_items as string[]) || [];
-    for (const item of learned) {
-      if (fuzzyMatch(norm, item)) return cat;
-    }
-  }
-
-  return null;
+  const result = findBestCategoryMatch(text, cats);
+  return result?.category || null;
 }
 
 export async function resolveCategory(

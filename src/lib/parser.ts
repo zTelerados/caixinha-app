@@ -2,6 +2,7 @@ import { ParsedMessage, ParsedIncome, ParsedCorrection, QueryResult, CategoryCom
 import { normalize, normalizeDescription, getLastDayOfWeek, monthLabel, friendlyName } from './formatter';
 import { humanNormalize, canonicalPayment, parseNumberWords, basicNormalize } from './normalize';
 import { Category } from '@/types';
+import { findBestCategoryMatch } from './categories';
 
 // ════════════════════════════════════════════════════════════
 // DETECÇÃO DE INTENÇÃO
@@ -293,35 +294,13 @@ export function parseExpense(msg: string, categories: Category[]): ParsedMessage
   let categorySource: 'keyword' | 'learned' | null = null;
   const txtCat = txt.replace(/\s+/g, ' ').trim();
 
-  // Check keywords
-  for (const cat of categories) {
-    for (const kw of cat.keywords || []) {
-      const kwNorm = normalize(kw);
-      if (txtCat.includes(kwNorm) || kwNorm.includes(txtCat)) {
-        categoryId = cat.id;
-        categoryName = cat.name;
-        categorySource = 'keyword';
-        break;
-      }
-    }
-    if (categoryId) break;
-  }
-
-  // Check learned_items if no keyword match
-  if (!categoryId) {
-    for (const cat of categories) {
-      const learned = (cat.learned_items as string[]) || [];
-      for (const item of learned) {
-        const itemNorm = normalize(item);
-        if (txtCat.includes(itemNorm) || itemNorm.includes(txtCat)) {
-          categoryId = cat.id;
-          categoryName = cat.name;
-          categorySource = 'learned';
-          break;
-        }
-      }
-      if (categoryId) break;
-    }
+  // Helper unico: keywords > learned_items, substring > fuzzy, com score por tamanho.
+  // Cobre typos ("uberr") e prioriza match mais longo ("uber casa" > "uber").
+  const match = findBestCategoryMatch(txtCat, categories);
+  if (match) {
+    categoryId = match.category.id;
+    categoryName = match.category.name;
+    categorySource = match.source;
   }
 
   // ── Clean description ──
