@@ -40,6 +40,36 @@ async function getMonthTransactions(userId: string, now: Date) {
   return txs || [];
 }
 
+// Periodo arbitrario com filtro opcional por categoria.
+// Usado por week, last_week, today, yesterday, last_month — permite follow-up "e mercado?".
+async function fetchPeriodExpenses(
+  userId: string,
+  start: Date,
+  end: Date,
+  categoryId?: string | null
+) {
+  let q = supabaseAdmin
+    .from('transactions')
+    .select('*, category:categories(name, emoji)')
+    .eq('user_id', userId)
+    .eq('type', 'expense')
+    .gte('date', start.toISOString())
+    .lt('date', end.toISOString())
+    .order('date', { ascending: false });
+  if (categoryId) q = q.eq('category_id', categoryId);
+  const { data } = await q;
+  return data || [];
+}
+
+function periodItems(txs: any[]) {
+  return txs.map((tx) => ({
+    description: tx.description,
+    amount: tx.amount,
+    category: (tx.category as any)?.name,
+    emoji: (tx.category as any)?.emoji,
+  }));
+}
+
 // ---------------------------------------------------------------------------
 // Main handler
 // ---------------------------------------------------------------------------
@@ -98,28 +128,56 @@ export async function handleQuery(userId: string, query: QueryResult): Promise<s
     });
   }
 
+  // Resolve term to category if provided (usado para filtro de periodo em follow-ups)
+  const filterCat = query.term ? await matchCategory(query.term, userId) : null;
+  const filterCatId = filterCat?.id ?? null;
+
   // ── Week ─────────────────────────────────────────────────
   if (query.type === 'week') {
     const weekStart = new Date(now.getTime() - 7 * 86400000);
-    const { data: txs } = await supabaseAdmin
-      .from('transactions')
-      .select('*, category:categories(name, emoji)')
-      .eq('user_id', userId)
-      .eq('type', 'expense')
-      .gte('date', weekStart.toISOString())
-      .order('date', { ascending: false });
-
-    const items = (txs || []).map((tx) => ({
-      description: tx.description,
-      amount: tx.amount,
-      category: (tx.category as any)?.name,
-      emoji: (tx.category as any)?.emoji,
-    }));
+    const txs = await fetchPeriodExpenses(userId, weekStart, new Date(now.getTime() + 86400000), filterCatId);
+    const items = periodItems(txs);
     const total = items.reduce((sum, t) => sum + t.amount, 0);
-
+    const label = filterCat ? `esta semana em ${friendlyName(filterCat.name)}` : 'esta semana';
     return buildQueryPeriodResponse({
       userName: user.name,
-      period: 'esta semana',
+      period: label,
+      transactions: items,
+      total,
+      count: items.length,
+      tone: user.tone,
+    });
+  }
+
+  // ── Last Week (7-14 dias atras) ──────────────────────────
+  if (query.type === 'last_week') {
+    const end = new Date(now.getTime() - 7 * 86400000);
+    const start = new Date(now.getTime() - 14 * 86400000);
+    const txs = await fetchPeriodExpenses(userId, start, end, filterCatId);
+    const items = periodItems(txs);
+    const total = items.reduce((sum, t) => sum + t.amount, 0);
+    const label = filterCat ? `semana passada em ${friendlyName(filterCat.name)}` : 'semana passada';
+    return buildQueryPeriodResponse({
+      userName: user.name,
+      period: label,
+      transactions: items,
+      total,
+      count: items.length,
+      tone: user.tone,
+    });
+  }
+
+  // ── Last Month (mes calendario anterior) ─────────────────
+  if (query.type === 'last_month') {
+    const start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const end = new Date(now.getFullYear(), now.getMonth(), 1);
+    const txs = await fetchPeriodExpenses(userId, start, end, filterCatId);
+    const items = periodItems(txs);
+    const total = items.reduce((sum, t) => sum + t.amount, 0);
+    const label = filterCat ? `${monthLabel(start)} em ${friendlyName(filterCat.name)}` : `mes passado (${monthLabel(start)})`;
+    return buildQueryPeriodResponse({
+      userName: user.name,
+      period: label,
       transactions: items,
       total,
       count: items.length,
@@ -131,27 +189,13 @@ export async function handleQuery(userId: string, query: QueryResult): Promise<s
   if (query.type === 'today') {
     const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const todayEnd = new Date(todayStart.getTime() + 86400000);
-
-    const { data: txs } = await supabaseAdmin
-      .from('transactions')
-      .select('*, category:categories(name, emoji)')
-      .eq('user_id', userId)
-      .eq('type', 'expense')
-      .gte('date', todayStart.toISOString())
-      .lt('date', todayEnd.toISOString())
-      .order('date', { ascending: false });
-
-    const items = (txs || []).map((tx) => ({
-      description: tx.description,
-      amount: tx.amount,
-      category: (tx.category as any)?.name,
-      emoji: (tx.category as any)?.emoji,
-    }));
+    const txs = await fetchPeriodExpenses(userId, todayStart, todayEnd, filterCatId);
+    const items = periodItems(txs);
     const total = items.reduce((sum, t) => sum + t.amount, 0);
-
+    const label = filterCat ? `hoje em ${friendlyName(filterCat.name)}` : 'hoje';
     return buildQueryPeriodResponse({
       userName: user.name,
-      period: 'hoje',
+      period: label,
       transactions: items,
       total,
       count: items.length,
@@ -163,27 +207,13 @@ export async function handleQuery(userId: string, query: QueryResult): Promise<s
   if (query.type === 'yesterday') {
     const yesterdayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
     const yesterdayEnd = new Date(yesterdayStart.getTime() + 86400000);
-
-    const { data: txs } = await supabaseAdmin
-      .from('transactions')
-      .select('*, category:categories(name, emoji)')
-      .eq('user_id', userId)
-      .eq('type', 'expense')
-      .gte('date', yesterdayStart.toISOString())
-      .lt('date', yesterdayEnd.toISOString())
-      .order('date', { ascending: false });
-
-    const items = (txs || []).map((tx) => ({
-      description: tx.description,
-      amount: tx.amount,
-      category: (tx.category as any)?.name,
-      emoji: (tx.category as any)?.emoji,
-    }));
+    const txs = await fetchPeriodExpenses(userId, yesterdayStart, yesterdayEnd, filterCatId);
+    const items = periodItems(txs);
     const total = items.reduce((sum, t) => sum + t.amount, 0);
-
+    const label = filterCat ? `ontem em ${friendlyName(filterCat.name)}` : 'ontem';
     return buildQueryPeriodResponse({
       userName: user.name,
-      period: 'ontem',
+      period: label,
       transactions: items,
       total,
       count: items.length,

@@ -72,10 +72,18 @@ export interface ParsedCorrection {
 }
 
 export interface QueryResult {
-  type: 'summary' | 'week' | 'today' | 'yesterday' | 'balance' | 'category' | 'biggest' | 'last_n' | 'compare' | 'daily_avg' | 'remaining' | 'status';
+  type: 'summary' | 'week' | 'last_week' | 'today' | 'yesterday' | 'last_month' | 'balance' | 'category' | 'biggest' | 'last_n' | 'compare' | 'daily_avg' | 'remaining' | 'status';
   term?: string;
   term2?: string;
   count?: number;
+}
+
+// Contexto de conversa: ultima pergunta do usuario, salva por 10 min.
+// Permite follow-ups tipo "e semana passada?" lembrando a categoria do turno anterior.
+export interface ConversationContext {
+  lastQuery: QueryResult;
+  history: Array<{ role: 'user' | 'bot'; text: string; at: string }>;
+  savedAt: string;
 }
 
 export interface CategoryCommand {

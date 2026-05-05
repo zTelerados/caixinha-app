@@ -121,6 +121,10 @@ export function detectQuery(msg: string): QueryResult | null {
     return { type: 'status' };
   }
 
+  // Periodos passados — vem antes de summary pra nao serem absorvidos por "quanto gastei..."
+  if (/semana\s+passad[ao]/.test(t)) return { type: 'last_week' };
+  if (/m[eê]s\s+passad[ao]/.test(t) || /no\s+m[eê]s\s+anterior/.test(t)) return { type: 'last_month' };
+
   // Remaining
   if (/sobra\s+(pro|para\s+o)\s+resto/.test(t) || /quanto\s+sobra/.test(t) || /resta\s+do\s+mes/.test(t)) {
     return { type: 'remaining' };
@@ -185,6 +189,88 @@ export function detectCategoryCommand(msg: string): CategoryCommand | null {
 
   const emojiMatch = m.match(/^muda\s+emoji\s+da\s+categoria\s+(.+)\s+pra\s+(.+)$/);
   if (emojiMatch) return { type: 'change_emoji', name: emojiMatch[1].trim(), emoji: emojiMatch[2].trim() };
+
+  return null;
+}
+
+// ════════════════════════════════════════════════════════════
+// FOLLOW-UP / MULTI-TURN
+// ════════════════════════════════════════════════════════════
+
+// Tenta interpretar uma mensagem como continuacao da pergunta anterior.
+// Ex: ultima pergunta foi "quanto gastei com mercado?" e usuario manda "e semana passada?"
+// Resultado: { type: 'last_week', term: 'mercado' } — bot busca mercado da semana passada.
+//
+// Padroes suportados:
+//  - "e ontem?" / "e hoje?" / "e semana passada?" / "e mes passado?" → muda periodo, mantem term
+//  - "e o maior?" / "e o ultimo?" → muda tipo, mantem term se aplicavel
+//  - "e [categoria]?" → mantem tipo (period), muda term
+//  - "e antes?" → periodo anterior do mesmo tipo (week → last_week)
+export function detectFollowUp(
+  msg: string,
+  lastQuery: QueryResult,
+  categories: Category[]
+): QueryResult | null {
+  const t = humanNormalize(msg).trim();
+
+  // Tem que comecar com conector de continuacao pra evitar ambiguidade.
+  // "e ontem?" e follow-up. "ontem" sozinho nao e (pode ser inicio de outra coisa).
+  const m = t.match(/^(e|tambem|tb|tbm|e\s+(?:tambem|tb|tbm))\s+(.+?)\s*\??$/);
+  if (!m) return null;
+  const tail = m[2].trim();
+
+  // Periodos
+  if (/^(no\s+)?(no\s+m[eê]s\s+)?passad[ao]/.test(tail) || tail === 'antes') {
+    // "e semana passada?" foi capturado abaixo; aqui e fallback generico de "antes"
+    if (lastQuery.type === 'week' || lastQuery.type === 'today' || lastQuery.type === 'yesterday') {
+      return { ...lastQuery, type: 'last_week' };
+    }
+    if (lastQuery.type === 'summary' || lastQuery.type === 'balance' || lastQuery.type === 'status') {
+      return { ...lastQuery, type: 'last_month' };
+    }
+    return { ...lastQuery, type: 'last_week' };
+  }
+  if (/(essa|esta|na|nessa|nesta)\s+semana|^semana(\s+atual)?$/.test(tail)) {
+    return { ...lastQuery, type: 'week' };
+  }
+  if (/semana\s+passad[ao]/.test(tail) || tail === 'na semana passada') {
+    return { ...lastQuery, type: 'last_week' };
+  }
+  if (/m[eê]s\s+passad[ao]/.test(tail) || /no\s+m[eê]s\s+anterior/.test(tail)) {
+    return { ...lastQuery, type: 'last_month' };
+  }
+  if (/^(no\s+)?(este|esse)?\s*m[eê]s$/.test(tail) || /^esse\s+m[eê]s$/.test(tail)) {
+    return { ...lastQuery, type: 'summary' };
+  }
+  if (tail === 'hoje') {
+    return { ...lastQuery, type: 'today' };
+  }
+  if (tail === 'ontem' || tail === 'de ontem') {
+    return { ...lastQuery, type: 'yesterday' };
+  }
+
+  // Mudanca de tipo
+  if (/^o\s+maior|^maior|^o\s+gasto\s+maior$/.test(tail)) {
+    return { type: 'biggest' };
+  }
+  if (/^(o\s+)?ultimo$/.test(tail) || /^ultimos?\s+\d+/.test(tail)) {
+    const numMatch = tail.match(/\d+/);
+    return { type: 'last_n', count: numMatch ? parseInt(numMatch[0], 10) : 1 };
+  }
+
+  // Troca de categoria. tail pode comecar com "em ", "com ", "de "
+  if (categories.length > 0) {
+    const cleanTail = tail.replace(/^(em|com|de|do|da)\s+/, '').trim();
+    if (cleanTail.length >= 2) {
+      // Tipos que aceitam filtro por categoria: mantem tipo, troca/adiciona term.
+      // Senao, cai pra category query nova.
+      const supportsCategoryFilter = ['week', 'last_week', 'today', 'yesterday', 'last_month', 'category'];
+      if (supportsCategoryFilter.includes(lastQuery.type)) {
+        return { type: lastQuery.type, term: cleanTail };
+      }
+      return { type: 'category', term: cleanTail };
+    }
+  }
 
   return null;
 }

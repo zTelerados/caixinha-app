@@ -6,10 +6,11 @@ import {
   detectCorrection,
   detectIncome,
   detectQuery,
+  detectFollowUp,
   detectCategoryCommand,
   parseExpense,
 } from '@/lib/parser';
-import { PendingAction } from '@/types';
+import { PendingAction, QueryResult, ConversationContext } from '@/types';
 import { handleUndo } from './undo';
 import { handleCorrection } from './correction';
 import { handleIncome } from './income';
@@ -26,6 +27,37 @@ import { v4 as uuidv4 } from 'uuid';
 
 // ─── Limiar de valor alto pra pedir confirmação ─────────
 const HIGH_VALUE_THRESHOLD = 200;
+
+// Contexto de conversa expira em 10 minutos.
+const CONVERSATION_TTL_MS = 10 * 60 * 1000;
+
+async function loadConversationContext(userId: string): Promise<ConversationContext | null> {
+  const { data } = await supabaseAdmin
+    .from('config')
+    .select('value')
+    .eq('user_id', userId)
+    .eq('key', 'conversation_context')
+    .single();
+  if (!data?.value) return null;
+  const ctx = data.value as ConversationContext;
+  const age = Date.now() - new Date(ctx.savedAt).getTime();
+  if (age > CONVERSATION_TTL_MS) return null;
+  return ctx;
+}
+
+async function saveConversationContext(userId: string, query: QueryResult): Promise<void> {
+  const ctx: ConversationContext = {
+    lastQuery: query,
+    history: [],
+    savedAt: new Date().toISOString(),
+  };
+  await supabaseAdmin
+    .from('config')
+    .upsert(
+      { user_id: userId, key: 'conversation_context', value: ctx },
+      { onConflict: 'user_id,key' }
+    );
+}
 
 export async function routeMessage(
   phone: string,
@@ -168,6 +200,24 @@ export async function routeMessage(
       return;
     }
 
+    // Priority 5a: Follow-up (tem que vir antes de detectQuery normal,
+    // pois "e mercado?" sozinho viraria fallback)
+    const conversationCtx = await loadConversationContext(user.id);
+    if (conversationCtx) {
+      const followUp = detectFollowUp(message, conversationCtx.lastQuery, categories);
+      if (followUp) {
+        dbg.setIntent('query_followup_' + followUp.type);
+        dbg.setHandler('handleQuery');
+        dbg.setParsed({ ...followUp, _followup: true } as any);
+        const response = await handleQuery(user.id, followUp);
+        await saveConversationContext(user.id, followUp);
+        const sent = await send(response);
+        dbg.setResponse(sent);
+        await dbg.flush();
+        return;
+      }
+    }
+
     // Priority 5: Query
     const query = detectQuery(message);
     if (query) {
@@ -175,6 +225,7 @@ export async function routeMessage(
       dbg.setHandler('handleQuery');
       dbg.setParsed(query as any);
       const response = await handleQuery(user.id, query);
+      await saveConversationContext(user.id, query);
       const sent = await send(response);
       dbg.setResponse(sent);
       await dbg.flush();
